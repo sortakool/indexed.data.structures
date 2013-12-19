@@ -97,6 +97,10 @@ public class TIndexedByteOpenHashSet extends TByteHash  {
 
     private void reset() {
         resetHandles();
+        resetArrays();
+    }
+
+    private void resetArrays() {
         Arrays.fill(_handles2Indexes, DEFAULT_INDEX);
         Arrays.fill(_indexes2Handles, DEFAULT_HANDLE);
     }
@@ -115,15 +119,55 @@ public class TIndexedByteOpenHashSet extends TByteHash  {
         _handles2Indexes = new int[capacity];
         _indexes2Handles = new int[capacity];
 
-        Arrays.fill(_handles2Indexes, DEFAULT_INDEX);
-        Arrays.fill(_indexes2Handles, DEFAULT_HANDLE);
+        resetArrays();
 
         return capacity;
     }
 
+    boolean isRehash = false;
+
+//    @Override
+//    /** {@inheritDoc} */
+//    protected void rehash(int newCapacity) {
+//        isRehash = true;
+//        int oldCapacity = _set.length;
+//
+//        byte oldSet[] = _set;
+//        byte oldStates[] = _states;
+//        int oldIndexes2Handles[] = _indexes2Handles;
+//        int oldHandles2Indexes[] = _handles2Indexes;
+//
+//        _set = new byte[newCapacity];
+//        _states = new byte[newCapacity];
+//        _indexes2Handles = new int[newCapacity];
+//        _handles2Indexes = new int[newCapacity];
+//        reset();
+////        resetArrays();
+//
+//        for ( int index = oldCapacity; index-- > 0; ) {
+//            if( oldStates[index] == FULL ) {
+//                int handle = oldIndexes2Handles[index];
+//                assert(oldHandles2Indexes[handle] == index);
+//                byte key = oldSet[index];
+//                int newIndex = insertKey(key);
+//                assert(_set[newIndex] == key);
+//                assert(_states[newIndex] == FULL);
+//
+//                if(_handles2Indexes[handle] != newIndex) {
+//                    _handles2Indexes[handle] = newIndex;
+//                    _indexes2Handles[newIndex] =  handle;
+//                }
+////                assert(_indexes2Handles[newIndex] != DEFAULT_HANDLE);
+////                assert(_handles2Indexes[_indexes2Handles[newIndex]] != DEFAULT_INDEX);
+//            }
+//        }
+//        isRehash = false;
+//    }
+
     @Override
     /** {@inheritDoc} */
     protected void rehash(int newCapacity) {
+        isRehash = true;
         int oldCapacity = _set.length;
 
         byte oldSet[] = _set;
@@ -131,60 +175,40 @@ public class TIndexedByteOpenHashSet extends TByteHash  {
         int oldIndexes2Handles[] = _indexes2Handles;
         int oldHandles2Indexes[] = _handles2Indexes;
 
+        int oldMinHandle = minHandle;
+        int oldMaxHandle = maxHandle;
+        int oldNextHandle = nextHandle;
+
         _set = new byte[newCapacity];
         _states = new byte[newCapacity];
         _indexes2Handles = new int[newCapacity];
         _handles2Indexes = new int[newCapacity];
-        reset();
 
-        for ( int i = oldCapacity; i-- > 0; ) {
-            if( oldStates[i] == FULL ) {
-                byte o = oldSet[i];
-                int index = insertKey(o);
+
+        reset();
+//        resetArrays();
+
+        for ( int handle = oldMinHandle; handle <= oldMaxHandle; handle++) {
+            int index = oldHandles2Indexes[handle];
+            if( oldStates[index] == FULL ) {
+                assert( oldIndexes2Handles[index] == handle);
+                assert( oldHandles2Indexes[handle] == index );
+
+                byte key = oldSet[index];
+                int newIndex = insertKey(key);
+                assert(_set[newIndex] == key);
+                assert(_states[newIndex] == FULL);
+
+//                if(_handles2Indexes[handle] != newIndex) {
+//                    _handles2Indexes[handle] = newIndex;
+//                    _indexes2Handles[newIndex] =  handle;
+//                }
+//                assert(_indexes2Handles[newIndex] != DEFAULT_HANDLE);
+//                assert(_handles2Indexes[_indexes2Handles[newIndex]] != DEFAULT_INDEX);
             }
         }
+        isRehash = false;
     }
-
-//    private int getNextFreeHandle() {
-//        for(int handle=nextHandle+1; handle< _handles2Indexes.length; handle++) {
-//            if(_handles2Indexes[handle] == DEFAULT_INDEX) {
-//                int retrievedHandle = _indexes2Handles[handle];
-//                assert(retrievedHandle == DEFAULT_HANDLE);
-//                assert (_states[handle] != FULL);
-//                return handle;             }
-//        }
-//        for(int handle=minHandle; handle<nextHandle; handle++) {
-//            if(_handles2Indexes[handle] == DEFAULT_INDEX) {
-//                int retrievedHandle = _indexes2Handles[handle];
-//                assert(retrievedHandle == DEFAULT_HANDLE);
-//                assert (_states[handle] != FULL);
-//                return handle;
-//            }
-//        }
-//        throw new RuntimeException("Unable to find next index. Where [minHandle="+minHandle+"][nextHandle="+nextHandle+"][maxHandle="+maxHandle+"]");
-//    }
-
-//    private int getNextFreeHandle() {
-//        int tempHandle = nextHandle;
-//
-//        for(int handle=nextHandle+1; handle< _states.length; handle++) {
-//            if(_states[handle] != FULL) {
-//                int retrievedHandle = _indexes2Handles[handle];
-//                assert(retrievedHandle == DEFAULT_HANDLE);
-//                assert (_states[handle] != FULL);
-//                return handle;
-//            }
-//        }
-//        for(int handle=minHandle; handle<nextHandle; handle++) {
-//            if(_handles2Indexes[handle] == DEFAULT_INDEX) {
-//                int retrievedHandle = _indexes2Handles[handle];
-//                assert(retrievedHandle == DEFAULT_HANDLE);
-//                assert (_states[handle] != FULL);
-//                return handle;
-//            }
-//        }
-//        throw new RuntimeException("Unable to find next index. Where [minHandle="+minHandle+"][nextHandle="+nextHandle+"][maxHandle="+maxHandle+"]");
-//    }
 
     private int getNextFreeHandle() {
 //        int tempHandle = nextHandle;
@@ -214,7 +238,9 @@ public class TIndexedByteOpenHashSet extends TByteHash  {
         postInsertHook( consumeFreeSlot );
 
         int handle = _indexes2Handles[index];
-        assert (handle == nextHandle);
+        if(!isRehash) {
+//            assert (handle == nextHandle) : "add[key="+val+"][index="+index+"][handle="+handle+"][nextHandle="+nextHandle+"]";
+        }
         return handle;            // yes, we added something
     }
 

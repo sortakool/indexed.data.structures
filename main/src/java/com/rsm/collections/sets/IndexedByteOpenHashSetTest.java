@@ -25,6 +25,17 @@ public class IndexedByteOpenHashSetTest {
         doAdd_Get_Remove(expected, loadFactor);
     }
 
+    @Test
+    public void testAll_Add_Get_Remove() throws Exception {
+//        float[] loadFactors = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.0f};
+        float[] loadFactors = {0.1f};
+        for(short i=1; i<= IndexedByteSet.MAX_VALUES; i++) {
+            for(float loadFactor : loadFactors) {
+                doAdd_Get_Remove(i, loadFactor);
+            }
+        }
+    }
+
     protected void doAdd_Get_Remove(short expected, float loadFactor) throws Exception {
         StringBuilder sb = new StringBuilder(1024);
         IndexedByteOpenHashSet set = new IndexedByteOpenHashSet(expected, loadFactor);
@@ -85,6 +96,9 @@ public class IndexedByteOpenHashSetTest {
         int currentSize;
         int i=0;
 
+//        //remove
+//        tempCheck(set, "before removal");
+
         //removal by key
         currentSize = set.getSize();
         log.info("-------------------------Removing By Key-------------------------");
@@ -105,6 +119,7 @@ public class IndexedByteOpenHashSetTest {
             Assert.assertEquals("key " + key + " at index " + index + " should be removed", IndexedByteSet.DEFAULT_KEY, retrievedKey);
             int retrievedIndex = set.getIndex(key);
             Assert.assertEquals("index " + index + " for key " + key + " should be removed", IndexedByteSet.DEFAULT_INDEX, retrievedIndex);
+//            tempCheck(set, "[key="+key+"][index="+index+"]");
             i++;
         }
         Assert.assertEquals(0, set.getSize());
@@ -133,6 +148,11 @@ public class IndexedByteOpenHashSetTest {
         Assert.assertEquals(0, set.getSize());
 
     }
+
+//    private void tempCheck(IndexedByteOpenHashSet set, String message) {
+//        int tempIndex = set.getIndex((byte)119);
+//        assert(tempIndex == 247) : message;
+//    }
 
     @Test
     public void testOneKeyAtATime() {

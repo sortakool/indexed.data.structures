@@ -26,9 +26,15 @@ public class TIndexedByteOpenHashSetTest {
 
     @Test
     public void testAdd_Get_Remove() throws Exception {
-        short expected = IndexedByteSet.MAX_VALUES;
-        float loadFactor = 0.8f;
-        doAdd_Get_Remove(expected, loadFactor);
+//        short expected = IndexedByteSet.MAX_VALUES;
+//        float loadFactor = 0.8f;
+//        float[] loadFactors = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.0f};
+        float[] loadFactors = {0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.0f};
+        for(short expected=1; expected<=IndexedByteSet.MAX_VALUES; expected++) {
+            for(float loadFactor : loadFactors) {
+                doAdd_Get_Remove(expected, loadFactor);
+            }
+        }
     }
 
     protected void doAdd_Get_Remove(short expected, float loadFactor) throws Exception {

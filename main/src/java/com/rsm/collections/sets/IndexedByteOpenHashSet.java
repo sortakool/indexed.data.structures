@@ -421,7 +421,6 @@ public class IndexedByteOpenHashSet extends AbstractIndexedCollection implements
             assert(indexes2KeysIndexes[retrievedIndex] == DEFAULT_KEY_INDEX);
             assert(keysIndexes2Indexes[keysIndex] == DEFAULT_INDEX);
             assert( removedKey == key) : "Removed key for index " + index + " should be " + key + " but is " + removedKey;
-
             return index;
         }
         return DEFAULT_INDEX;
