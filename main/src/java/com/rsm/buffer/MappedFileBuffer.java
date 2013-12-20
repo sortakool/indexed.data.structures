@@ -341,6 +341,7 @@ implements BufferFacade, Cloneable
             child.order(order);
     }
 
+    @Override
     public int getCurrentIndex() {
         return currentIndex;
     }
@@ -348,6 +349,7 @@ implements BufferFacade, Cloneable
     /**
      *  Retrieves a single byte from the current position.
      */
+    @Override
     public byte get()
     {
         byte value = currentByteBuffer.get();
@@ -360,6 +362,7 @@ implements BufferFacade, Cloneable
         return buffer(index).get();
     }
 
+    @Override
     public void put(byte value) {
         currentByteBuffer.put(value);
         position += 1;
@@ -380,6 +383,7 @@ implements BufferFacade, Cloneable
      * Retrieves a four-byte integer starting at the current position.
      * @return
      */
+    @Override
     public int getInt() {
         int value = 0;
         int remaining = currentByteBuffer.remaining();
@@ -548,6 +552,7 @@ implements BufferFacade, Cloneable
         return value;
     }
 
+    @Override
     public void putInt(int value) {
         int remaining = currentByteBuffer.remaining();
         if(remaining < 4) {
@@ -820,6 +825,7 @@ implements BufferFacade, Cloneable
      *  @throws IndexOutOfBoundsException if the request would read past
      *          the end of file.
      */
+    @Override
     public byte[] getBytes(long index, byte[] array, int off, int len)
     {
         while (len > 0)
@@ -855,6 +861,7 @@ implements BufferFacade, Cloneable
      *  @throws IndexOutOfBoundsException if the request would write past
      *          the end of file.
      */
+    @Override
     public void putBytes(long index, byte[] value, int off, int len)
     {
         while (len > 0)

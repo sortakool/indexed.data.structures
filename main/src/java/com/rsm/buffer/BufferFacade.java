@@ -27,12 +27,18 @@ import java.nio.ByteBuffer;
  */
 public interface BufferFacade
 {
+    int getCurrentIndex();
+
+    byte get();
+
     /**
      *  Returns the single byte at the specified index (relative to the
      *  relocation base).
      */
     public byte get(long index);
 
+
+    void put(byte value);
 
     /**
      *  Updates the single byte at the specified index (relative to the
@@ -55,12 +61,16 @@ public interface BufferFacade
     public void putShort(long index, short value);
 
 
+    int getInt();
+
     /**
      *  Returns the 4-byte <code>int</code> value at the specified index
      *  (relative to the relocation base).
      */
     public int getInt(long index);
 
+
+    void putInt(int value);
 
     /**
      *  Sets the 4-byte <code>int</code> value at the specified index
@@ -132,12 +142,16 @@ public interface BufferFacade
     public byte[] getBytes(long index, int len);
 
 
+    byte[] getBytes(long index, byte[] array, int off, int len);
+
     /**
      *  Inserts the specified array into the buffer, starting at the given
      *  index (relative to the relocation base).
      */
     public void putBytes(long index, byte[] value);
 
+
+    void putBytes(long index, byte[] value, int off, int len);
 
     /**
      *  Returns a <code>ByteBuffer</code> that represents a slice of the
@@ -171,4 +185,6 @@ public interface BufferFacade
      *  was invoked</em> (because it clones the buffer).
      */
     public long limit();
+
+    public byte[] getArray();
 }
