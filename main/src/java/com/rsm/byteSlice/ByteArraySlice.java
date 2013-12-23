@@ -20,28 +20,28 @@ public class ByteArraySlice {
     public ByteArraySlice(byte[] data) {
         this.data = data;
         this.offset = 0;
-        this.position = 0;
+        this.position = this.offset;
         this.length = data.length;
     }
 
     public ByteArraySlice(byte[] data, int offset, int length) {
         this.data = data;
         this.offset = offset;
-        this.position = 0;
+        this.position = this.offset;
         this.length = data.length;
     }
 
     public void set(byte[] data) {
         this.data = data;
         this.offset = 0;
-        this.position = 0;
+        this.position = this.offset;
         this.length = data.length;
     }
 
     public void set(byte[] data, int offset, int length) {
         this.data = data;
         this.offset = offset;
-        this.position = 0;
+        this.position = this.offset;
         this.length = data.length;
     }
 
@@ -55,6 +55,10 @@ public class ByteArraySlice {
 
     public int getPosition() {
         return position;
+    }
+
+    public void setPosition(int position) {
+        this.position = position;
     }
 
     public int getLength() {

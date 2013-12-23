@@ -179,22 +179,25 @@ public class BufferBaseRecordImpl<TYPE> extends BaseRecord<TYPE> implements Buff
 
     @Override
     public void setBytes(BytesColumn column, String value) {
-
+        long position = getPosition(column);
+        buffer.putBytes(position, value.getBytes(), 0, value.getBytes().length);
     }
 
     @Override
     public void setBytes(BytesColumn column, ByteArraySlice value) {
-
+        long position = getPosition(column);
+        buffer.putBytes(position, value.getArray(), value.getPosition(), value.getLength());
     }
 
     @Override
     public void setBytes(BytesColumn column, byte[] value) {
-
+        setBytes(column, value, 0, value.length);
     }
 
     @Override
     public void setBytes(BytesColumn column, byte[] value, int offset, int length) {
-
+        long position = getPosition(column);
+        buffer.putBytes(position, value, offset, length);
     }
 
     @Override
@@ -209,31 +212,43 @@ public class BufferBaseRecordImpl<TYPE> extends BaseRecord<TYPE> implements Buff
 
     @Override
     public void deltaByte(ByteColumn column, byte delta) {
-
+        long position = getPosition(column);
+        byte value = (byte)(buffer.get(position) + delta);
+        buffer.put(position, value);
     }
 
     @Override
     public void deltaShort(ShortColumn column, short delta) {
-
+        long position = getPosition(column);
+        short value = (short)(buffer.getShort(position) + delta);
+        buffer.putShort(position, value);
     }
 
     @Override
     public void deltaInt(IntColumn column, int delta) {
-
+        long position = getPosition(column);
+        int value = (int)(buffer.getInt(position) + delta);
+        buffer.putInt(position, value);
     }
 
     @Override
     public void deltaLong(ByteColumn column, long delta) {
-
+        long position = getPosition(column);
+        long value = (long)(buffer.getInt(position) + delta);
+        buffer.putLong(position, value);
     }
 
     @Override
     public void deltaFloat(FloatColumn column, float delta) {
-
+        long position = getPosition(column);
+        float value = (float)(buffer.getFloat(position) + delta);
+        buffer.putFloat(position, value);
     }
 
     @Override
     public void deltaDouble(DoubleColumn column, double delta) {
-
+        long position = getPosition(column);
+        double value = (double)(buffer.getDouble(position) + delta);
+        buffer.putDouble(position, value);
     }
 }

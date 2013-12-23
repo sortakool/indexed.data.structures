@@ -1,5 +1,7 @@
 package com.rsm.tables.schemas;
 
+import com.rsm.tables.columns.Column;
+
 import java.util.Collection;
 
 /**

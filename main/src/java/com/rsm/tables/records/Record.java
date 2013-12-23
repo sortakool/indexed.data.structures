@@ -43,7 +43,7 @@ public interface Record<TYPE> {
     void setDouble(DoubleColumn column, double value);
 
     ByteArraySlice getBytes(BytesColumn column, ByteArraySlice destination);
-    void getBytes(BytesColumn column, byte[] column, int offset);
+    void getBytes(BytesColumn column, byte[] destination, int offset);
     String getBytes(BytesColumn column);
     void setBytes(BytesColumn column, String value);
     void setBytes(BytesColumn column, ByteArraySlice value);
