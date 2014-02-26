@@ -15,8 +15,8 @@
 package com.rsm.buffer;
 
 import com.rsm.util.ByteUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
@@ -930,7 +930,16 @@ implements BufferFacade, Cloneable
         return (int)(filePosition / _segmentSize);
     }
 
-//----------------------------------------------------------------------------
+    /**
+     * Wouldnt let me compile it unless i added this method
+     * @return
+     */
+    @Override
+    public byte[] getArray() {
+        return new byte[0];
+    }
+
+    //----------------------------------------------------------------------------
 //  Internals
 //----------------------------------------------------------------------------
 
