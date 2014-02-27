@@ -5,6 +5,10 @@ package com.rsm.message;
  */
 public interface Message {
 
+    long getTimestampMillis();
+
+    long getMicros();
+
     byte getMajor();
 
     byte getMinor();
