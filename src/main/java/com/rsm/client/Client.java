@@ -1,14 +1,17 @@
 package com.rsm.client;
 
 import com.rsm.client.handlers.MoldCommandOutgoingHandler;
-import com.rsm.servers.handlers.MoldCommandIncomingHandler;
 import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.DatagramChannel;
+import io.netty.channel.socket.DatagramPacket;
 import io.netty.channel.socket.nio.NioDatagramChannel;
+import io.netty.util.CharsetUtil;
 
-import java.net.DatagramPacket;
+import java.net.InetSocketAddress;
+
 
 /**
  * Basic client that will send a basic message sleep and then send the message again
@@ -22,8 +25,6 @@ public class Client {
     public void run() throws InterruptedException {
         EventLoopGroup g = new NioEventLoopGroup();
 
-        final MoldCommandOutgoingHandler handler = new MoldCommandOutgoingHandler();
-
         try {
             Bootstrap b = new Bootstrap();
             b.group(g)
@@ -33,13 +34,17 @@ public class Client {
 
                         @Override
                         protected void initChannel(DatagramChannel ch) throws Exception {
-                            ch.pipeline().addLast(handler);
+                            ch.pipeline().addLast(new MoldCommandOutgoingHandler());
                         }
                     });
 
             ChannelFuture future = b.connect("localhost", port).sync();
 
-            future.channel().writeAndFlush("This is a test");
+            future.channel().writeAndFlush(
+                    new DatagramPacket(
+                            Unpooled.copiedBuffer("Test", CharsetUtil.UTF_8),
+                            new InetSocketAddress("localhost", port)
+             )).sync();
 
             future.channel().closeFuture().sync();
 
