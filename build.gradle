@@ -11,4 +11,5 @@ dependencies {
     compile 'log4j:log4j:1.2.17'
     compile 'junit:junit:4.11'
     compile 'it.unimi.dsi:fastutil:6.5.12'
+    compile 'io.netty:netty-all:5.0.0.Alpha1'
 }
