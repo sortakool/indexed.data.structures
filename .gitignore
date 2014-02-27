@@ -4,3 +4,4 @@
 *.ipr
 .gradle
 .gradletasknamecache
+build
