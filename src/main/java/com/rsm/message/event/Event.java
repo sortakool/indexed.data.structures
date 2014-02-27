@@ -3,10 +3,7 @@ package com.rsm.message.event;
 /**
  * Created by rmanaloto on 2/25/14.
  */
-public interface Event {
+public interface Event extends com.rsm.message.Message {
 
     long getSequence();
-    int getSource();
-    int getId();
-    int getReference();
 }

@@ -7,5 +7,5 @@ import com.rsm.message.event.Event;
  */
 public interface SOUPConnector {
 
-    void onMessageSent(Event envent);
+    void onMessageSent(Event event);
 }
