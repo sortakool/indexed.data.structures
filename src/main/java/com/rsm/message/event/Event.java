@@ -1,4 +1,4 @@
-package com.rsm.event;
+package com.rsm.message.event;
 
 /**
  * Created by rmanaloto on 2/25/14.

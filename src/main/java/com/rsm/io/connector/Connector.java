@@ -1,6 +1,6 @@
 package com.rsm.io.connector;
 
-import com.rsm.event.Event;
+import com.rsm.message.event.Event;
 
 /**
  * Created by rmanaloto on 2/25/14.
