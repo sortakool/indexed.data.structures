@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<messageSchema package="com.rsm.message.nasdaq.binaryfile.index"
+               id="1"
+               semanticVersion="5.2"
+               description="NASDAQ BinaryFile Index Schema"
+               byteOrder="bigEndian">
+    <types>
+        <composite name="messageHeader" description="Message identifiers and length of message root">
+            <type name="blockLength" primitiveType="uint16"/>
+            <type name="templateId" primitiveType="uint16"/>
+            <type name="schemaId" primitiveType="uint16"/>
+            <type name="version" primitiveType="uint16"/>
+        </composite>
+        <composite name="sequencePositionMap">
+            <type name="sequence" primitiveType="uint64"/>
+            <type name="position" primitiveType="uint64"/>
+        </composite>
+        <!--<composite name="sequencePositionMaps" semanticType="NumInGroup">-->
+            <!--<type name="blockLength" primitiveType="uint16"/>-->
+            <!--<type name="numInGroup" primitiveType="uint8"/>-->
+        <!--</composite>-->
+    </types>
+
+    <message name="BinaryFileIndex" id="1">
+        <!--<group name="sequencePositions" id="1" dimensionType="sequencePositionMaps">-->
+        <!--</group>-->
+        <field name="sequencePositions" id="1" type="sequencePositionMap"/>
+    </message>
+
+</messageSchema>

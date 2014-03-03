@@ -14,6 +14,7 @@
 
 package com.rsm.buffer;
 
+import com.rsm.byteSlice.ByteArraySlice;
 import com.rsm.util.ByteUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -26,6 +27,7 @@ import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
+import java.util.Arrays;
 
 
 /**
@@ -50,6 +52,8 @@ implements BufferFacade, Cloneable
     private static final Logger log = LogManager.getLogger(MappedFileBuffer.class);
 
     private final static int MAX_SEGMENT_SIZE = 0x8000000; // 1 GB, assures alignment
+
+    public static final ByteOrder NATIVE_BYTE_ORDER = ByteOrder.nativeOrder();
 
     private File _file;
     private boolean _isWritable;
@@ -88,7 +92,7 @@ implements BufferFacade, Cloneable
     public MappedFileBuffer(File file)
     throws IOException
     {
-        this(file, MAX_SEGMENT_SIZE, MAX_SEGMENT_SIZE, MAX_SEGMENT_SIZE, false, false);
+        this(file, MAX_SEGMENT_SIZE, MAX_SEGMENT_SIZE, MAX_SEGMENT_SIZE, true, false);
     }
 
 
@@ -273,7 +277,7 @@ implements BufferFacade, Cloneable
     }
 
     public MappedFileBuffer position(long position) {
-        this.position = position();
+        this.position = position;
         currentByteBuffer = buffer(position);
         return this;
     }
@@ -378,6 +382,94 @@ implements BufferFacade, Cloneable
         buffer(index).put(value);
     }
 
+    /**
+     * Retrieves a four-byte integer starting at the current position.
+     * @return
+     */
+    public int getInt(ByteOrder byteOrder) {
+        int value = 0;
+        int remaining = currentByteBuffer.remaining();
+        if(remaining < 4) {
+            byte int0 = 0;
+            byte int1 = 0;
+            byte int2 = 0;
+            byte int3 = 0;
+            if(getByteOrder() == ByteOrder.BIG_ENDIAN) {
+                switch(remaining) {
+                    case 1:
+                        int3 = currentByteBuffer.get();
+                        position += 1;
+                        currentByteBuffer = buffer(position);
+                        int2 = currentByteBuffer.get();
+                        int1 = currentByteBuffer.get();
+                        int0 = currentByteBuffer.get();
+                        position += 3;
+                        break;
+                    case 2:
+                        int3 = currentByteBuffer.get();
+                        int2 = currentByteBuffer.get();
+                        position += 2;
+                        currentByteBuffer = buffer(position);
+                        int1 = currentByteBuffer.get();
+                        int0 = currentByteBuffer.get();
+                        position += 2;
+                        break;
+                    case 3:
+                        int3 = currentByteBuffer.get();
+                        int2 = currentByteBuffer.get();
+                        int1 = currentByteBuffer.get();
+                        position += 3;
+                        currentByteBuffer = buffer(position);
+                        int0 = currentByteBuffer.get();
+                        position += 1;
+                        break;
+                }
+            }
+            else {      //ByteOrder.LITTLE_ENDIAN
+                switch(remaining) {
+                    case 1:
+                        int0 = currentByteBuffer.get();
+                        position += 1;
+                        currentByteBuffer = buffer(position);
+                        int1 = currentByteBuffer.get();
+                        int2 = currentByteBuffer.get();
+                        int3 = currentByteBuffer.get();
+                        position += 3;
+                        break;
+                    case 2:
+                        int0 = currentByteBuffer.get();
+                        int1 = currentByteBuffer.get();
+                        position += 2;
+                        currentByteBuffer = buffer(position);
+                        int2 = currentByteBuffer.get();
+                        int3 = currentByteBuffer.get();
+                        position += 2;
+                        break;
+                    case 3:
+                        int0 = currentByteBuffer.get();
+                        int1 = currentByteBuffer.get();
+                        int2 = currentByteBuffer.get();
+                        position += 3;
+                        currentByteBuffer = buffer(position);
+                        int3 = currentByteBuffer.get();
+                        position += 1;
+                        break;
+                }
+            }
+            currentByteBuffer = buffer(position);
+            value = ByteUtils.makeInt(int3, int2, int1, int0);
+        }
+        else {
+            value = currentByteBuffer.getInt();
+            if(NATIVE_BYTE_ORDER != byteOrder) {
+                value = Integer.reverseBytes(value);
+            }
+            position += 4;
+            currentByteBuffer = buffer(position);
+        }
+        currentIndex = getBuffersIndex(position);
+        return value;
+    }
 
     /**
      * Retrieves a four-byte integer starting at the current position.
@@ -725,6 +817,23 @@ implements BufferFacade, Cloneable
 
 
     /**
+     * Get the value at a given index.
+     *
+     * @param index in bytes from which to get.
+     * @param byteOrder of the value to be read.
+     * @return the value at a given index.
+     */
+    public short getShort(final long index, final ByteOrder byteOrder)
+    {
+        short bits = getShort(index);
+        if (NATIVE_BYTE_ORDER != byteOrder)
+        {
+            bits = Short.reverseBytes(bits);
+        }
+        return bits;
+    }
+
+    /**
      *  Retrieves a four-byte integer starting at the specified index.
      */
     public short getShort(long index)
@@ -840,6 +949,25 @@ implements BufferFacade, Cloneable
         return array;
     }
 
+    public byte[] getBytes(byte[] array, int off, int len)
+    {
+        while (len > 0)
+        {
+            ByteBuffer buf = currentByteBuffer;
+            int count = Math.min(len, buf.remaining());
+            buf.get(array, off, count);
+            off += count;
+            len -= count;
+        }
+        return array;
+    }
+
+//    public ByteArraySlice getBytes(long index, ByteArraySlice destination, long offset, long length) {
+//        destination.set
+//
+//        return destination;
+//    }
+
 
     /**
      *  Stores the contents of the passed byte array, starting at the given index.
@@ -944,7 +1072,7 @@ implements BufferFacade, Cloneable
 //----------------------------------------------------------------------------
 
     // this is exposed for a white-box test of cloning
-    protected MappedByteBuffer buffer(long filePosition)
+    public MappedByteBuffer buffer(long filePosition)
     {
         int newCurrentPosition = (int)(filePosition % _segmentSize);
         int bufferIndex = getBuffersIndex(filePosition);

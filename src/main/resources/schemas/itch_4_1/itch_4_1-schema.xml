@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<messageSchema package="com.rsm.message.nasdaq.itch.v4_1"
+               id="2"
+               semanticVersion="5.2"
+               description="NASDAQ BinaryFile Schema"
+               byteOrder="bigEndian">
+    <types>
+        <composite name="messageHeader" description="Message identifiers and length of message root">
+            <type name="blockLength" primitiveType="uint16"/>
+            <type name="templateId" primitiveType="uint16"/>
+            <type name="schemaId" primitiveType="uint16"/>
+            <type name="version" primitiveType="uint16"/>
+        </composite>
+        <composite name="groupSize" semanticType="NumInGroup">
+            <type name="blockLength" primitiveType="uint16"/>
+            <type name="numInGroup" primitiveType="uint8"/>
+        </composite>
+        <composite name="varDataEncoding">
+            <type name="length" primitiveType="uint16"/>
+            <!--<type name="varData" primitiveType="char"/>-->
+            <type name="varData" primitiveType="int8" length="0" characterEncoding="ASCII" semanticType="data"/>
+        </composite>
+
+
+        <type name="secondsType" primitiveType="uint32" description="Reflects the number of seconds past midnight that the Timestamp message was generated."/>
+        <type name="nanosecondsType" primitiveType="uint64" description="Reflects the number of nanoseconds since the most recent Timestamp-Seconds message that the payload message was generated."/>
+        <type name="timestamp" primitiveType="uint64" timeUnit="nanosecond" semanticType="UTCTimestamp"/>
+        <type name="seconds" primitiveType="uint32" timeUnit="seconds"/>
+        <type name="sequence" primitiveType="uint64" description="Sequence number for the event in the stream."/>
+
+
+        <composite name="streamHeader">
+            <type name="timestampNanos" primitiveType="uint64" timeUnit="nanosecond" semanticType="UTCTimestamp"/>
+            <type name="major" primitiveType="char" description="Major event type"/>
+            <type name="minor" primitiveType="char" description="Minor event type"/>
+            <type name="source" primitiveType="uint64" description="Source of the event"/>
+            <type name="id" primitiveType="uint32" description="Id of the source"/>
+            <type name="ref" primitiveType="uint32" description="Reference of the source"/>
+        </composite>
+
+        <!-- itch specific messages -->
+        <enum name="ITCHMessageType" encodingType="char" semanticType="char">
+            <validValue name="TIMESTAMP_SECONDS">T</validValue><!--84-->
+        </enum>
+        <composite name="timestampSecondsType" id="84" description="Seconds Message">
+            <type name="messageType" primitiveType="char" presence="constant">T</type>
+            <type name="seconds" primitiveType="uint32" timeUnit="seconds"/>
+        </composite>
+    </types>
+
+    <message name="TimestampSecondsMessage" id="84" description="TimestampSeconds"><!-- T -->
+        <field name="payload" id="1" type="timestampSecondsType"/>
+    </message>
+    <message name="TimestampSecondsCommand" id="1084" description="TimestampSeconds Command">
+        <field name="streamHeader" id="1" type="streamHeader"/>
+        <field name="payload" id="2" type="timestampSecondsType"/>
+    </message>
+    <message name="TimestampSecondsEvent" id="2084" description="TimestampSeconds Event">
+        <field name="sequence" id="1" type="sequence"/>
+        <field name="streamHeader" id="2" type="streamHeader"/>
+        <field name="payload" id="3" type="timestampSecondsType"/>
+    </message>
+
+
+</messageSchema>
