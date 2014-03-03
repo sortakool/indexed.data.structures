@@ -15,16 +15,19 @@
             <type name="blockLength" primitiveType="uint16"/>
             <type name="numInGroup" primitiveType="uint8"/>
         </composite>
+        <composite name="binaryFileType">
+            <type name="length" primitiveType="int16"/>
+            <type name="payload" primitiveType="int8" length="0" characterEncoding="ASCII" semanticType="data"/>
+
+        </composite>
         <composite name="varDataEncoding">
-            <type name="length" primitiveType="uint16"/>
-            <!--<type name="varData" primitiveType="char"/>-->
-            <type name="varData" primitiveType="int8" length="0" characterEncoding="ASCII" semanticType="data"/>
+            <type name="length" primitiveType="int16" semanticType="Length"/>
+            <type name="varData" primitiveType="int8" length="0" characterEncoding="ASCII" semanticType="message"/>
         </composite>
     </types>
 
     <message name="BinaryFile" id="1">
-        <!--<field name="message" id="1" type="messageHeader"/>-->
-        <field name="payload" id="2" type="varDataEncoding"/>
+        <data name="message" id="1" type="varDataEncoding" semanticType="Payload"/>
     </message>
 
 </messageSchema>
