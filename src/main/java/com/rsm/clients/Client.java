@@ -2,6 +2,8 @@ package com.rsm.clients;
 
 import com.rsm.clients.handlers.DatagramWrapperHandler;
 import com.rsm.clients.handlers.MoldCommandOutgoingHandler;
+import com.rsm.clients.handlers.TimestampSecondsCommandEncoder;
+import com.rsm.message.nasdaq.itch.v4_1.TimestampSecondsCommand;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -9,6 +11,7 @@ import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.NetUtil;
+import uk.co.real_logic.sbe.codec.java.DirectBuffer;
 
 import java.net.InetSocketAddress;
 
@@ -40,9 +43,11 @@ public class Client {
 
                     @Override
                     protected void initChannel(DatagramChannel ch) throws Exception {
+//                        ch.pipeline().addLast(new LoggingHandler())
+//                                .addLast(new MoldCommandOutgoingHandler())
+//                                .addLast(new DatagramWrapperHandler(groupAddress));
                         ch.pipeline().addLast(new LoggingHandler())
-                                .addLast(new MoldCommandOutgoingHandler())
-                                .addLast(new DatagramWrapperHandler(groupAddress));
+                                .addLast(new TimestampSecondsCommandEncoder());
                     }
                 }).localAddress(port);
     }
@@ -51,16 +56,16 @@ public class Client {
         DatagramChannel ch = (DatagramChannel) bootstrap.bind().sync().channel();
 
 
-        ch.joinGroup(groupAddress, NetUtil.LOOPBACK_IF).sync();
+        //we do not need to join the multicast unless we want to get messages
+        //ch.joinGroup(groupAddress, NetUtil.LOOPBACK_IF).sync();
 
         for (;;) {
             System.out.println("Sending");
-//            ch.write("Hello");
-//            ch.writeAndFlush(
-//                    new DatagramPacket(Unpooled.copyInt(counter++), groupAddress)
-//            );
+//            ch.write(counter++);
+            TimestampSecondsCommand secondsCommand = new TimestampSecondsCommand();
 
-            ch.write(counter++);
+            ch.write(secondsCommand);
+
             ch.flush();
             Thread.sleep(1000);
         }
