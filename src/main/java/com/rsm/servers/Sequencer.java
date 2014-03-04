@@ -6,6 +6,7 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioDatagramChannel;
+import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.NetUtil;
 import io.netty.channel.socket.DatagramChannel;
 
@@ -34,6 +35,7 @@ public class Sequencer {
                     .option(ChannelOption.SO_BROADCAST, true)
                     .option(ChannelOption.SO_REUSEADDR, true)
                     .option(ChannelOption.IP_MULTICAST_IF, NetUtil.LOOPBACK_IF)
+                    .handler(new LoggingHandler())
                     .handler(new MoldCommandIncomingHandler());
 
             DatagramChannel channel = (DatagramChannel) bootstrap.bind(port).sync().channel();
