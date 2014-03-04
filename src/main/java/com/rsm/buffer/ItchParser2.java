@@ -1,12 +1,16 @@
 package com.rsm.buffer;
 
+import com.rsm.message.nasdaq.binaryfile.BinaryFile;
 import com.rsm.message.nasdaq.binaryfile.index.BinaryFileIndex;
 import com.rsm.message.nasdaq.binaryfile.index.SequencePositionMap;
+import com.rsm.message.nasdaq.itch.v4_1.*;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import uk.co.real_logic.sbe.codec.java.DirectBuffer;
 
 import java.io.File;
 import java.nio.ByteOrder;
+import java.nio.MappedByteBuffer;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -22,33 +26,93 @@ public class ItchParser2 {
         File file = path.toFile();
         MappedFileBuffer fileBuffer = new MappedFileBuffer(file);
 
-        BinaryFileIndex binaryFileIndex = new BinaryFileIndex();
-        SequencePositionMap sequencePositionMap = binaryFileIndex.sequencePositions();
+        BinaryFile binaryFile = new BinaryFile();
+
+
+
 
         long position = fileBuffer.position();
+
+        MappedByteBuffer byteBuffer = fileBuffer.buffer(position);
+        final DirectBuffer directBuffer = new DirectBuffer(byteBuffer);
+
+        //public BinaryFile wrapForDecode(final DirectBuffer buffer, final int offset, final int actingBlockLength, final int actingVersion)
+        binaryFile.wrapForDecode(directBuffer, (int)position, binaryFile.sbeBlockLength(), binaryFile.sbeSchemaVersion());
+
+        final byte[] messageBuffer = new byte[1024];
+        DirectBuffer messageDirectBuffer = new DirectBuffer(messageBuffer);
+
+        final byte[] commandBuffer = new byte[1024];
+        DirectBuffer commandDirectBuffer = new DirectBuffer(commandBuffer);
+
+        final byte[] eventBuffer = new byte[1024];
+        DirectBuffer eventDirectBuffer = new DirectBuffer(eventBuffer);
+
         long seq = 0;
         while(true) {
             log.info("position="+position);
-            short messageLength = fileBuffer.getShort(position, ByteOrder.BIG_ENDIAN);
-            log.info("messageLength="+messageLength);
-            if(messageLength == 0) {
-                //A message of length zero is used to indicate the end of the session
+
+            int bytesCopied = binaryFile.getMessage(messageBuffer, (int) position, messageBuffer.length);
+            if(bytesCopied == 0) {
                 break;
             }
-            position+=2;
-            fileBuffer.position(position);
-
-
-            position = fileBuffer.position();
-            log.info("position=" + position);
-
-            long returnedPosition = parsePayload(fileBuffer, position, messageLength);
-
-            position += (messageLength);
-
-            fileBuffer.position(returnedPosition);
             seq++;
-            log.info("seq=" + seq);
+
+            byte messageType = messageBuffer[0];
+
+            switch(messageType) {
+                case 'T':
+                    TimestampSecondsMessage timestampSecondsMessage = new TimestampSecondsMessage();
+                    timestampSecondsMessage.wrapForDecode(messageDirectBuffer, 0, timestampSecondsMessage.sbeBlockLength(), timestampSecondsMessage.sbeSchemaVersion());
+                    TimestampSecondsType payload = timestampSecondsMessage.payload();
+
+
+
+                    int messageTypeLength = payload.getMessageType(messageBuffer, 0, messageBuffer.length);
+                    assert(messageTypeLength == 1);
+                    long seconds = payload.seconds();
+                    log.info("[seconds="+seconds+"]");
+
+                    TimestampSecondsType timestampSecondsType = new TimestampSecondsType();
+                    timestampSecondsType.wrap(messageDirectBuffer, 0, timestampSecondsMessage.sbeSchemaVersion());
+                    long seconds1 = timestampSecondsType.seconds();
+                    log.info("[seconds="+seconds1+"]");
+                    assert (seconds == seconds1);
+
+                    TimestampSecondsCommand timestampSecondsCommand = new TimestampSecondsCommand();
+                    timestampSecondsCommand.wrapForEncode(commandDirectBuffer, 0);
+                    StreamHeader streamHeader = timestampSecondsCommand.streamHeader();
+                    streamHeader
+                            .timestampNanos(System.nanoTime())
+                            .major((byte)'S')
+                            .minor(messageType)
+                            .source(1L)//convert a 8-bit ascii to a long
+                            .id(seq)//should be source specific id sequence
+                            .ref(seq)
+                    ;
+                    TimestampSecondsType payload1 = timestampSecondsCommand.payload();
+                    payload1.seconds(seconds);
+                    int size = timestampSecondsCommand.size();
+                    log.info("size="+size);
+
+                    break;
+                case 'S':
+                    SystemEventMessage systemEventMessage = new SystemEventMessage();
+                    //public SystemEventMessage wrapForDecode(final DirectBuffer buffer, final int offset, final int actingBlockLength, final int actingVersion)
+                    systemEventMessage.wrapForDecode(directBuffer, (int)position, systemEventMessage.sbeBlockLength(), systemEventMessage.sbeSchemaVersion());
+                    SystemEventType systemEventType = systemEventMessage.payload();
+                    int timestamp = systemEventType.timestamp();
+                    byte eventCode = systemEventType.eventCode();
+                    log.info("[timestamp="+timestamp+"][eventCode="+eventCode+"]");
+                    break;
+                default:
+                    log.error("Unhandled type: " + (char)messageType);
+                    break;
+            }
+
+            position += (2 + bytesCopied);
+
+            fileBuffer.position(position);
         }
         log.info("finished");
     }

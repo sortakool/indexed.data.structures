@@ -24,7 +24,7 @@
 
         <type name="secondsType" primitiveType="uint32" description="Reflects the number of seconds past midnight that the Timestamp message was generated."/>
         <type name="nanosecondsType" primitiveType="uint64" description="Reflects the number of nanoseconds since the most recent Timestamp-Seconds message that the payload message was generated."/>
-        <type name="timestamp" primitiveType="uint64" timeUnit="nanosecond" semanticType="UTCTimestamp"/>
+        <type name="timestamp" primitiveType="int32" timeUnit="nanosecond" semanticType="UTCTimestamp"/>
         <type name="seconds" primitiveType="uint32" timeUnit="seconds"/>
         <type name="sequence" primitiveType="uint64" description="Sequence number for the event in the stream."/>
 
@@ -46,8 +46,14 @@
             <type name="messageType" primitiveType="char" presence="constant">T</type>
             <type name="seconds" primitiveType="uint32" timeUnit="seconds"/>
         </composite>
+        <composite name="systemEventType" id="83" description="Seconds Message"><!-- S -->
+            <type name="messageType" primitiveType="char" presence="constant">S</type>
+            <type name="timestamp" primitiveType="int32" timeUnit="timestamp"/>
+            <type name="eventCode" primitiveType="char"/>
+        </composite>
     </types>
 
+    <!-- TimestampSeconds -->
     <message name="TimestampSecondsMessage" id="84" description="TimestampSeconds"><!-- T -->
         <field name="payload" id="1" type="timestampSecondsType"/>
     </message>
@@ -59,6 +65,20 @@
         <field name="sequence" id="1" type="sequence"/>
         <field name="streamHeader" id="2" type="streamHeader"/>
         <field name="payload" id="3" type="timestampSecondsType"/>
+    </message>
+
+    <!-- SystemEvent -->
+    <message name="SystemEventMessage" id="83" description="SystemEvent"><!-- S -->
+        <field name="payload" id="1" type="systemEventType"/>
+    </message>
+    <message name="TimestampSecondsCommand" id="1083" description="TimestampSeconds Command">
+        <field name="streamHeader" id="1" type="streamHeader"/>
+        <field name="payload" id="2" type="systemEventType"/>
+    </message>
+    <message name="TimestampSecondsEvent" id="2083" description="TimestampSeconds Event">
+        <field name="sequence" id="1" type="sequence"/>
+        <field name="streamHeader" id="2" type="streamHeader"/>
+        <field name="payload" id="3" type="systemEventType"/>
     </message>
 
 
