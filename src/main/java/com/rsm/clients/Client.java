@@ -1,31 +1,89 @@
-package com.rsm.buffer;
+package com.rsm.clients;
 
-import com.rsm.message.nasdaq.binaryfile.BinaryFile;
-import com.rsm.message.nasdaq.binaryfile.index.BinaryFileIndex;
-import com.rsm.message.nasdaq.binaryfile.index.SequencePositionMap;
+import com.rsm.buffer.MappedFileBuffer;
+import com.rsm.clients.handlers.TimestampSecondsCommandEncoder;
 import com.rsm.message.nasdaq.itch.v4_1.*;
+import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.*;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.DatagramChannel;
+import io.netty.channel.socket.nio.NioDatagramChannel;
+import io.netty.handler.logging.LoggingHandler;
+import io.netty.util.NetUtil;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import uk.co.real_logic.sbe.codec.java.DirectBuffer;
 
 import java.io.File;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-/**
- * Created by rmanaloto on 2/27/14.
- */
-public class ItchParser2 {
 
-    private static final Logger log = LogManager.getLogger(ItchParser2.class);
+/**
+ * @see com.rsm.buffer.ItchParser2
+ *
+ * Basic client that will send a basic message sleep and then send the message again
+ */
+public class Client {
+
+    private static final Logger log = LogManager.getLogger(Client.class);
+
+    private final Bootstrap bootstrap;
+    private final EventLoopGroup group;
+    private InetSocketAddress groupAddress;
+
+    private int port = 9999;
+    private int counter = 0;
+    private String mCastGroup = "FF02:0:0:0:0:0:0:3";
+    private String name = "test";
 
     final TimestampSecondsMessage timestampSecondsMessage = new TimestampSecondsMessage();
     final SystemEventMessage systemEventMessage = new SystemEventMessage();
     final StockDirectoryMessage stockDirectoryMessage = new StockDirectoryMessage();
+    final byte[] temp = new byte[1024];
 
-    public ItchParser2() throws Exception {
+    //commands
+    final TimestampSecondsCommand timestampSecondsCommand = new TimestampSecondsCommand();
+    final SystemEventCommand systemEventCommand = new SystemEventCommand();
+    final StockDirectoryCommand stockDirectoryCommand = new StockDirectoryCommand();
+
+    public Client() {
+        group = new NioEventLoopGroup();
+        groupAddress = new InetSocketAddress(mCastGroup, port);
+
+        bootstrap = new Bootstrap();
+        bootstrap.group(group)
+                .channel(NioDatagramChannel.class)
+                .option(ChannelOption.SO_BROADCAST, true)
+                .option(ChannelOption.SO_REUSEADDR, true)
+                .option(ChannelOption.IP_MULTICAST_IF, NetUtil.LOOPBACK_IF)
+                .handler(new ChannelInitializer<DatagramChannel>() {
+
+                    @Override
+                    protected void initChannel(DatagramChannel ch) throws Exception {
+//                        ch.pipeline().addLast(new LoggingHandler())
+//                                .addLast(new MoldCommandOutgoingHandler())
+//                                .addLast(new DatagramWrapperHandler(groupAddress));
+                        ch.pipeline().addLast(new LoggingHandler())
+                                .addLast(new TimestampSecondsCommandEncoder());
+                    }
+                }).localAddress(port);
+
+    }
+
+    public void run() throws Exception {
+        DatagramChannel ch = (DatagramChannel) bootstrap.bind().sync().channel();
+
+
+        //we do not need to join the multicast unless we want to get messages
+        //ch.joinGroup(groupAddress, NetUtil.LOOPBACK_IF).sync();
+
         Path path = Paths.get("/Users/rmanaloto/Downloads/11092013.NASDAQ_ITCH41");
         File file = path.toFile();
         MappedFileBuffer fileBuffer = new MappedFileBuffer(file);
@@ -35,13 +93,9 @@ public class ItchParser2 {
         MappedByteBuffer byteBuffer = fileBuffer.buffer(position);
         final DirectBuffer directBuffer = new DirectBuffer(byteBuffer);
 
-        final byte[] commandBuffer = new byte[1024];
+        ByteBuf commandByteBuf = Unpooled.directBuffer(1024);
+        ByteBuffer commandBuffer = commandByteBuf.nioBuffer();
         DirectBuffer commandDirectBuffer = new DirectBuffer(commandBuffer);
-
-        final byte[] eventBuffer = new byte[1024];
-        DirectBuffer eventDirectBuffer = new DirectBuffer(eventBuffer);
-
-        byte[] temp = new byte[1024];
 
         long seq = 0;
         while(true) {
@@ -71,13 +125,6 @@ public class ItchParser2 {
                     log.info("[seconds="+seconds+"]");
 
                     //create command
-                    TimestampSecondsType timestampSecondsType = new TimestampSecondsType();
-                    timestampSecondsType.wrap(directBuffer, (int)position, timestampSecondsMessage.sbeSchemaVersion());
-                    long seconds1 = timestampSecondsType.seconds();
-                    log.info("[seconds="+seconds1+"]");
-                    assert (seconds == seconds1);
-
-                    TimestampSecondsCommand timestampSecondsCommand = new TimestampSecondsCommand();
                     timestampSecondsCommand.wrapForEncode(commandDirectBuffer, 0);
                     StreamHeader streamHeader = timestampSecondsCommand.streamHeader();
                     streamHeader
@@ -88,6 +135,9 @@ public class ItchParser2 {
                             .id(seq)//should be source specific id sequence
                             .ref(seq)
                     ;
+                    timestampSecondsCommand.messageType(ITCHMessageType.TIMESTAMP_SECONDS);
+                    timestampSecondsCommand.seconds(System.currentTimeMillis());//TODO figure out how to just get seconds since midnight
+                    //TODO send command over datagram channel
 
                     break;
                 case SYSTEM_EVENT:
@@ -97,6 +147,7 @@ public class ItchParser2 {
                     long timestamp = systemEventMessage.timestamp();
                     byte eventCode = systemEventMessage.eventCode();
                     log.info("[timestamp="+timestamp+"][eventCode="+eventCode+"]");
+                    //TODO create command and send command over datagram channel
                     break;
                 case STOCK_DIRECTORY:
                     stockDirectoryMessage.wrapForDecode(directBuffer, (int)position, stockDirectoryMessage.sbeBlockLength(), stockDirectoryMessage.sbeSchemaVersion());
@@ -105,6 +156,7 @@ public class ItchParser2 {
                     long nanoseconds = stockDirectoryMessage.nanoseconds();
                     stockDirectoryMessage.getStock(temp, 0);
                     log.info("[nanoseconds="+nanoseconds+"][stock="+new String(temp, 0, StockDirectoryMessage.stockLength())+"]");
+                    //TODO create command and send command over datagram channel
                     break;
                 default:
                     log.error("Unhandled type: " + (char)messageType);
@@ -115,10 +167,32 @@ public class ItchParser2 {
 
         }
         log.info("finished");
+
+//        for (;;) {
+//            System.out.println("Sending");
+////            ch.write(counter++);
+//            TimestampSecondsCommand secondsCommand = new TimestampSecondsCommand();
+//
+//            ch.write(secondsCommand);
+//
+//            ch.flush();
+//            Thread.sleep(1000);
+//        }
     }
 
+    private void stop() {
+        group.shutdownGracefully();
+    }
 
     public static void main(String[] args) throws Exception {
-        ItchParser2 paser = new ItchParser2();
+        System.out.println("Starting client");
+        Client client = new Client();
+
+        try {
+            client.run();
+        } finally {
+            client.stop();
+        }
     }
+
 }

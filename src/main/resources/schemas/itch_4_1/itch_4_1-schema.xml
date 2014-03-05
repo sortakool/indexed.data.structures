@@ -47,20 +47,6 @@
             <validValue name="REG_SHO_SHORT_SALE">Y</validValue><!---->
             <validValue name="MARKET_PARTICIPANT_POSITION">L</validValue><!---->
         </enum>
-<!--        <composite name="timestampSecondsType" id="84" description="Timestamp Seconds Message">
-            <type name="messageType" primitiveType="char" semanticType="ITCHMessageType"/>
-            <type name="seconds" primitiveType="uint32" timeUnit="seconds"/>
-        </composite>-->
-<!--        <composite name="systemEventType" id="83" description="System Event Message">&lt;!&ndash; S &ndash;&gt;
-            <type name="messageType" primitiveType="char" semanticType="ITCHMessageType"/>
-            <type name="timestamp" primitiveType="uint32" timeUnit="timestamp"/>
-            <type name="eventCode" primitiveType="int8"/>
-        </composite>-->
-        <!--<composite name="stockDirectoryType" id="82" description="Stock Directory Message">&lt;!&ndash; R &ndash;&gt;-->
-            <!--<type name="messageType" primitiveType="char" semanticType="ITCHMessageType"/>-->
-            <!--<type name="nanoseconds" primitiveType="uint32" timeUnit="timestamp"/>-->
-            <!--<type name="stock" primitiveType="int8"/>-->
-        <!--</composite>-->
     </types>
 
     <!-- TimestampSeconds -->
