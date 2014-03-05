@@ -53,6 +53,8 @@ public class Client {
     final SystemEventCommand systemEventCommand = new SystemEventCommand();
     final StockDirectoryCommand stockDirectoryCommand = new StockDirectoryCommand();
 
+    ByteBuf byteBuf = Unpooled.directBuffer(1024);
+
     public Client() {
         group = new NioEventLoopGroup();
         groupAddress = new InetSocketAddress(mCastGroup, port);
@@ -71,7 +73,7 @@ public class Client {
 //                                .addLast(new MoldCommandOutgoingHandler())
 //                                .addLast(new DatagramWrapperHandler(groupAddress));
                         ch.pipeline().addLast(new LoggingHandler())
-                                .addLast(new TimestampSecondsCommandEncoder());
+                                .addLast(new TimestampSecondsCommandEncoder(byteBuf, groupAddress));
                     }
                 }).localAddress(port);
 
@@ -114,8 +116,6 @@ public class Client {
 
             ITCHMessageType retrievedItchMessageType;
 
-
-
             switch(itchMessageType) {
                 case TIMESTAMP_SECONDS:
                     timestampSecondsMessage.wrapForDecode(directBuffer, (int)position, timestampSecondsMessage.sbeBlockLength(), timestampSecondsMessage.sbeSchemaVersion());
@@ -124,20 +124,7 @@ public class Client {
                     long seconds = timestampSecondsMessage.seconds();
                     log.info("[seconds="+seconds+"]");
 
-                    //create command
-                    timestampSecondsCommand.wrapForEncode(commandDirectBuffer, 0);
-                    StreamHeader streamHeader = timestampSecondsCommand.streamHeader();
-                    streamHeader
-                            .timestampNanos(System.nanoTime())
-                            .major((byte)'S')
-                            .minor(messageType)
-                            .source(1L)//convert a 8-bit ascii to a long
-                            .id(seq)//should be source specific id sequence
-                            .ref(seq)
-                    ;
-                    timestampSecondsCommand.messageType(ITCHMessageType.TIMESTAMP_SECONDS);
-                    timestampSecondsCommand.seconds(System.currentTimeMillis());//TODO figure out how to just get seconds since midnight
-                    //TODO send command over datagram channel
+                    ch.write(timestampSecondsMessage);
 
                     break;
                 case SYSTEM_EVENT:
