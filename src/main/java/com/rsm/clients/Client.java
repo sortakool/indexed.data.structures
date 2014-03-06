@@ -47,6 +47,7 @@ public class Client {
     private final TimestampSecondsMessage timestampSecondsMessage = new TimestampSecondsMessage();
     private final SystemEventMessage systemEventMessage = new SystemEventMessage();
     private final StockDirectoryMessage stockDirectoryMessage = new StockDirectoryMessage();
+    private final StockTradingActionMessage stockTradingActionMessage = new StockTradingActionMessage();
     private final byte[] temp = new byte[1024];
 
     //commands
@@ -155,13 +156,13 @@ public class Client {
                     //TODO create command and send command over datagram channel
                     break;
                 case STOCK_TRADING_ACTION:
-                    stockTradingActionCommand.wrapForDecode(directBuffer, (int)position, stockTradingActionCommand.sbeBlockLength(), stockTradingActionCommand.sbeSchemaVersion());
-                    retrievedItchMessageType = stockTradingActionCommand.messageType();
+                    stockTradingActionMessage.wrapForDecode(directBuffer, (int)position, stockTradingActionMessage.sbeBlockLength(), stockTradingActionMessage.sbeSchemaVersion());
+                    retrievedItchMessageType = stockTradingActionMessage.messageType();
                     assert(retrievedItchMessageType == itchMessageType);
-                    tempLength = stockTradingActionCommand.getStock(temp, 0);
-                    TradingStateType tradingState = stockTradingActionCommand.tradingState();
-                    byte reserved = stockTradingActionCommand.reserved();
-                    tempLength = stockTradingActionCommand.getReason(temp, 0);
+                    tempLength = stockTradingActionMessage.getStock(temp, 0);
+                    TradingStateType tradingState = stockTradingActionMessage.tradingState();
+                    byte reserved = stockTradingActionMessage.reserved();
+                    tempLength = stockTradingActionMessage.getReason(temp, 0);
                     break;
                 default:
                     log.error("Unhandled type: " + (char)messageType);
