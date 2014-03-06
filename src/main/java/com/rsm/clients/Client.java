@@ -21,6 +21,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -86,7 +87,9 @@ public class Client {
         //we do not need to join the multicast unless we want to get messages
         //ch.joinGroup(groupAddress, NetUtil.LOOPBACK_IF).sync();
 
-        Path path = Paths.get("/Users/rmanaloto/Downloads/11092013.NASDAQ_ITCH41");
+
+        Path path = Paths.get(System.getProperty( "user.home" ) +
+                "/Downloads/11092013.NASDAQ_ITCH41");
         File file = path.toFile();
         MappedFileBuffer fileBuffer = new MappedFileBuffer(file);
 
@@ -124,7 +127,7 @@ public class Client {
                     long seconds = timestampSecondsMessage.seconds();
                     log.info("[seconds="+seconds+"]");
 
-                    ch.write(timestampSecondsMessage);
+                    ch.writeAndFlush(timestampSecondsMessage);
 
                     break;
                 case SYSTEM_EVENT:

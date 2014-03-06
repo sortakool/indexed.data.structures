@@ -80,3 +80,4 @@ public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<Time
 
     }
 }
+

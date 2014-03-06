@@ -23,6 +23,6 @@ dependencies {
 task runClient(type: JavaExec) {
     description = "Run the client"
     classpath sourceSets.main.runtimeClasspath
-    main = "com.rsm.client.Client"
+    main = "com.rsm.clients.Client"
 }
 
