@@ -44,17 +44,17 @@ public class Client {
     private String mCastGroup = "FF02:0:0:0:0:0:0:3";
     private String name = "test";
 
-    final TimestampSecondsMessage timestampSecondsMessage = new TimestampSecondsMessage();
-    final SystemEventMessage systemEventMessage = new SystemEventMessage();
-    final StockDirectoryMessage stockDirectoryMessage = new StockDirectoryMessage();
-    final byte[] temp = new byte[1024];
+    private final TimestampSecondsMessage timestampSecondsMessage = new TimestampSecondsMessage();
+    private final SystemEventMessage systemEventMessage = new SystemEventMessage();
+    private final StockDirectoryMessage stockDirectoryMessage = new StockDirectoryMessage();
+    private final byte[] temp = new byte[1024];
 
     //commands
-    final TimestampSecondsCommand timestampSecondsCommand = new TimestampSecondsCommand();
-    final SystemEventCommand systemEventCommand = new SystemEventCommand();
-    final StockDirectoryCommand stockDirectoryCommand = new StockDirectoryCommand();
+    private final TimestampSecondsCommand timestampSecondsCommand = new TimestampSecondsCommand();
+    private final SystemEventCommand systemEventCommand = new SystemEventCommand();
+    private final StockDirectoryCommand stockDirectoryCommand = new StockDirectoryCommand();
 
-    ByteBuf byteBuf = Unpooled.directBuffer(1024);
+    private final ByteBuf byteBuf = Unpooled.directBuffer(1024);
 
     public Client() {
         group = new NioEventLoopGroup();
@@ -127,7 +127,7 @@ public class Client {
                     long seconds = timestampSecondsMessage.seconds();
                     log.info("[seconds="+seconds+"]");
 
-                    ch.write(timestampSecondsMessage);
+                    ch.writeAndFlush(timestampSecondsMessage);
 
                     break;
                 case SYSTEM_EVENT:
@@ -150,14 +150,13 @@ public class Client {
                     break;
                 default:
                     log.error("Unhandled type: " + (char)messageType);
-                        break;
+                    break;
             }
 
             position += messageLength;
 
         }
         log.info("finished");
-
     }
 
     private void stop() {
