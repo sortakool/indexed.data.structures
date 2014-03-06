@@ -1,10 +1,10 @@
 package com.rsm.clients.handlers;
 
-import com.rsm.message.nasdaq.itch.v4_1.MessageHeader;
-import com.rsm.message.nasdaq.itch.v4_1.TimestampSecondsCommand;
+import com.rsm.message.nasdaq.itch.v4_1.*;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.socket.DatagramPacket;
 import io.netty.handler.codec.MessageToByteEncoder;
 import io.netty.handler.codec.MessageToMessageEncoder;
 import org.apache.log4j.Logger;
@@ -19,46 +19,60 @@ import java.util.List;
  * Date: 3/3/14
  * Time: 8:27 PM
  */
-public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<TimestampSecondsCommand> {
+public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<TimestampSecondsMessage> {
     Logger logger = Logger.getLogger(this.getClass());
 
-    @Override
-    protected void encode(ChannelHandlerContext ctx, TimestampSecondsCommand msg, List<Object> out) throws Exception {
-        logger.info("Sending some stuff");
+    final TimestampSecondsCommand timestampSecondsCommand = new TimestampSecondsCommand();
 
-        final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(4096);
+    private int counter = 0;
 
-        final DirectBuffer buf = new DirectBuffer(byteBuffer);
+    final DatagramPacket datagramPacket;
+    private final ByteBuf byteBuf;
+    private final ByteBuffer byteBuffer;
+    final DirectBuffer commandDirectBuffer;
+    private final InetSocketAddress remoteAddress;
 
-        int bufferOffset = 0;
-        int encodingLength = 0;
-
-//        msg.streamHeader().timestampNanos(6).id(1);
-//        msg.payload().seconds(6);
-//        msg.wrapForEncode(buf, 0);
-        MessageHeader messageHeader = new MessageHeader();
-
-        messageHeader.wrap(buf, bufferOffset, 0)
-                .blockLength(msg.sbeBlockLength())
-                .templateId(msg.sbeTemplateId())
-                .schemaId(msg.sbeSchemaId())
-                .version(msg.sbeSchemaVersion());
-
-        bufferOffset += messageHeader.size();
-        encodingLength += messageHeader.size();
-        encodingLength += encode(msg, buf, bufferOffset);
+    private final long source = 1L; //convert a 8-bit ascii to a long
 
 
-        out.add(msg);
+    public TimestampSecondsCommandEncoder(ByteBuf byteBuf, InetSocketAddress remoteAddress) {
+        this.byteBuf = byteBuf;
+        this.byteBuffer = byteBuf.nioBuffer();
+        this.commandDirectBuffer = new DirectBuffer(byteBuffer);
+        this.remoteAddress = remoteAddress;
+        datagramPacket = new DatagramPacket(byteBuf, remoteAddress);
 
+        this.counter = 0;//should be source specific id sequence
     }
 
-    private int encode(final TimestampSecondsCommand msg, final DirectBuffer directBuffer, final int bufferOfset) {
-        final int srcOffset = 0;
+    @Override
+    protected void encode(ChannelHandlerContext ctx, TimestampSecondsMessage msg, List<Object> out) throws Exception {
+        logger.info("Sending some stuff");
 
-        msg.wrapForEncode(directBuffer, bufferOfset).payload().seconds(100);
+        counter++;
 
-        return msg.size();
+        byteBuf.clear();
+
+        //create command
+        timestampSecondsCommand.wrapForEncode(commandDirectBuffer, byteBuffer.position());
+        StreamHeader streamHeader = timestampSecondsCommand.streamHeader();
+        streamHeader
+                .timestampNanos(System.nanoTime())
+                .major((byte)'S')
+                .minor(msg.messageType().value())
+                .source(source)
+                .id(counter)
+                .ref(counter)
+        ;
+        timestampSecondsCommand.messageType(msg.messageType());
+        timestampSecondsCommand.seconds(System.currentTimeMillis());//TODO figure out how to just get seconds since midnight
+
+        byteBuffer.flip();
+
+        byteBuf.writeBytes(byteBuffer);
+
+        out.add(datagramPacket);
 
     }
 }
+
