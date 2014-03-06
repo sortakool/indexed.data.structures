@@ -67,11 +67,16 @@ public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<Time
         timestampSecondsCommand.messageType(msg.messageType());
         timestampSecondsCommand.seconds(msg.seconds());
 
+        int size = timestampSecondsCommand.size();
+        byteBuffer.position(size);
         byteBuffer.flip();
+
+
 
         byteBuf.writeBytes(byteBuffer);
 
         out.add(datagramPacket);
+//        ctx.channel().flush();
 
     }
 }
