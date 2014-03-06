@@ -26,10 +26,10 @@ public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<Time
 
     private int counter = 0;
 
-    final DatagramPacket datagramPacket;
+    private final DatagramPacket datagramPacket;
     private final ByteBuf byteBuf;
     private final ByteBuffer byteBuffer;
-    final DirectBuffer commandDirectBuffer;
+    private final DirectBuffer commandDirectBuffer;
     private final InetSocketAddress remoteAddress;
 
     private final long source = 1L; //convert a 8-bit ascii to a long
@@ -37,7 +37,7 @@ public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<Time
 
     public TimestampSecondsCommandEncoder(ByteBuf byteBuf, InetSocketAddress remoteAddress) {
         this.byteBuf = byteBuf;
-        this.byteBuffer = byteBuf.nioBuffer();
+        this.byteBuffer = byteBuf.nioBuffer(0, this.byteBuf.capacity());
         this.commandDirectBuffer = new DirectBuffer(byteBuffer);
         this.remoteAddress = remoteAddress;
         datagramPacket = new DatagramPacket(byteBuf, remoteAddress);
@@ -65,7 +65,7 @@ public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<Time
                 .ref(counter)
         ;
         timestampSecondsCommand.messageType(msg.messageType());
-        timestampSecondsCommand.seconds(System.currentTimeMillis());//TODO figure out how to just get seconds since midnight
+        timestampSecondsCommand.seconds(msg.seconds());
 
         byteBuffer.flip();
 

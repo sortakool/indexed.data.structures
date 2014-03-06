@@ -43,17 +43,17 @@ public class Client {
     private String mCastGroup = "FF02:0:0:0:0:0:0:3";
     private String name = "test";
 
-    final TimestampSecondsMessage timestampSecondsMessage = new TimestampSecondsMessage();
-    final SystemEventMessage systemEventMessage = new SystemEventMessage();
-    final StockDirectoryMessage stockDirectoryMessage = new StockDirectoryMessage();
-    final byte[] temp = new byte[1024];
+    private final TimestampSecondsMessage timestampSecondsMessage = new TimestampSecondsMessage();
+    private final SystemEventMessage systemEventMessage = new SystemEventMessage();
+    private final StockDirectoryMessage stockDirectoryMessage = new StockDirectoryMessage();
+    private final byte[] temp = new byte[1024];
 
     //commands
-    final TimestampSecondsCommand timestampSecondsCommand = new TimestampSecondsCommand();
-    final SystemEventCommand systemEventCommand = new SystemEventCommand();
-    final StockDirectoryCommand stockDirectoryCommand = new StockDirectoryCommand();
+    private final TimestampSecondsCommand timestampSecondsCommand = new TimestampSecondsCommand();
+    private final SystemEventCommand systemEventCommand = new SystemEventCommand();
+    private final StockDirectoryCommand stockDirectoryCommand = new StockDirectoryCommand();
 
-    ByteBuf byteBuf = Unpooled.directBuffer(1024);
+    private final ByteBuf byteBuf = Unpooled.directBuffer(1024);
 
     public Client() {
         group = new NioEventLoopGroup();
@@ -154,17 +154,6 @@ public class Client {
 
         }
         log.info("finished");
-
-//        for (;;) {
-//            System.out.println("Sending");
-////            ch.write(counter++);
-//            TimestampSecondsCommand secondsCommand = new TimestampSecondsCommand();
-//
-//            ch.write(secondsCommand);
-//
-//            ch.flush();
-//            Thread.sleep(1000);
-//        }
     }
 
     private void stop() {
