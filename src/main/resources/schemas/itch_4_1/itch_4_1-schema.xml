@@ -27,7 +27,16 @@
         <type name="timestamp" primitiveType="uint32" timeUnit="nanosecond" semanticType="UTCTimestamp"/>
         <type name="seconds" primitiveType="uint32" timeUnit="seconds"/>
         <type name="sequence" primitiveType="uint64" description="Sequence number for the event in the stream."/>
-        <type name="symbol" length="5" primitiveType="char"/>
+        <type name="symbol" length="8" primitiveType="char"/>
+        <type name="reserved1" primitiveType="char"/>
+        <type name="string2" length="2" primitiveType="char"/>
+        <type name="string3" length="3" primitiveType="char"/>
+        <type name="string4" length="4" primitiveType="char"/>
+        <type name="string5" length="5" primitiveType="char"/>
+        <type name="string6" length="6" primitiveType="char"/>
+        <type name="string7" length="7" primitiveType="char"/>
+        <type name="string8" length="8" primitiveType="char"/>
+
 
         <composite name="streamHeader">
             <type name="timestampNanos" primitiveType="uint64" timeUnit="nanosecond" semanticType="UTCTimestamp"/>
@@ -46,6 +55,16 @@
             <validValue name="STOCK_TRADING_ACTION">H</validValue><!---->
             <validValue name="REG_SHO_SHORT_SALE">Y</validValue><!---->
             <validValue name="MARKET_PARTICIPANT_POSITION">L</validValue><!---->
+        </enum>
+        <enum name="YesNoType" encodingType="char" semanticType="char">
+            <validValue name="YES">Y</validValue>
+            <validValue name="NO">N</validValue>
+        </enum>
+        <enum name="TradingStateType" encodingType="char" semanticType="char">
+            <validValue name="HALTED" description="Halted across all U.S. equity markets/SROs">H</validValue>
+            <validValue name="PAUSED" description="Paused across all U.S. equity markets/SROs (NASDAQ-listed securities only)">P</validValue>
+            <validValue name="QUOTATION" description="Quotation only period for cross-SRO halt or pause">Q</validValue>
+            <validValue name="TRADING" description="Trading on NASDAQ">T</validValue>
         </enum>
     </types>
 
@@ -94,25 +113,70 @@
 
     <!-- StockDirectory -->
     <message name="StockDirectoryMessage" id="82" description="StockDirectory"><!-- R -->
-        <!--<field name="payload" id="1" type="systemEventType"/>-->
+        <!-- payload -->
         <field name="messageType" id="1" type="ITCHMessageType"/>
         <field name="nanoseconds" id="5" type="timestamp" timeUnit="timestamp"/>
         <field name="stock" id="6" type="symbol"/>
+        <field name="marketCategory" id="7" type="char"/>
+        <field name="financialStatusIndicator" id="8" type="char"/>
+        <field name="roundLotSize" id="9" type="uint32"/>
+        <field name="roundLotsOnly" id="10" type="YesNoType"/>
     </message>
     <message name="StockDirectoryCommand" id="1082" description="StockDirectory Command">
         <field name="streamHeader" id="1" type="streamHeader"/>
-        <!--<field name="payload" id="2" type="systemEventType"/>-->
+        <!-- payload -->
         <field name="messageType" id="1" type="ITCHMessageType"/>
         <field name="nanoseconds" id="5" type="timestamp" timeUnit="timestamp"/>
         <field name="stock" id="6" type="symbol"/>
+        <field name="marketCategory" id="7" type="char"/>
+        <field name="financialStatusIndicator" id="8" type="char"/>
+        <field name="roundLotSize" id="9" type="uint32"/>
+        <field name="roundLotsOnly" id="10" type="YesNoType"/>
     </message>
     <message name="StockDirectoryEvent" id="2082" description="StockDirectory Event">
         <field name="sequence" id="1" type="sequence"/>
         <field name="streamHeader" id="2" type="streamHeader"/>
-        <!--<field name="payload" id="3" type="systemEventType"/>-->
+        <!-- payload -->
         <field name="messageType" id="1" type="ITCHMessageType"/>
         <field name="nanoseconds" id="5" type="timestamp" timeUnit="timestamp"/>
         <field name="stock" id="6" type="symbol"/>
+        <field name="marketCategory" id="7" type="char"/>
+        <field name="financialStatusIndicator" id="8" type="char"/>
+        <field name="roundLotSize" id="9" type="uint32"/>
+        <field name="roundLotsOnly" id="10" type="YesNoType"/>
+    </message>
+
+    <!-- StockTradingAction -->
+    <message name="StockTradingActionMessage" id="72" description="StockTradingAction"><!-- H -->
+        <!-- payload -->
+        <field name="messageType" id="1" type="ITCHMessageType"/>
+        <field name="timestampNanoseconds" id="5" type="timestamp" timeUnit="timestamp"/>
+        <field name="stock" id="6" type="symbol"/>
+        <field name="tradingState" id="11" type="TradingStateType"/>
+        <field name="reserved" id="12" type="reserved1"/>
+        <field name="reason" id="13" type="string4"/>
+
+    </message>
+    <message name="StockTradingActionCommand" id="1072" description="StockTradingAction Command">
+        <field name="streamHeader" id="1" type="streamHeader"/>
+        <!-- payload -->
+        <field name="messageType" id="1" type="ITCHMessageType"/>
+        <field name="nanoseconds" id="5" type="timestamp" timeUnit="timestamp"/>
+        <field name="stock" id="6" type="symbol"/>
+        <field name="tradingState" id="11" type="TradingStateType"/>
+        <field name="reserved" id="12" type="reserved1"/>
+        <field name="reason" id="13" type="string4"/>
+    </message>
+    <message name="StockTradingActionEvent" id="2072" description="StockTradingAction Event">
+        <field name="sequence" id="1" type="sequence"/>
+        <field name="streamHeader" id="2" type="streamHeader"/>
+        <!-- payload -->
+        <field name="messageType" id="1" type="ITCHMessageType"/>
+        <field name="nanoseconds" id="5" type="timestamp" timeUnit="timestamp"/>
+        <field name="stock" id="6" type="symbol"/>
+        <field name="tradingState" id="11" type="TradingStateType"/>
+        <field name="reserved" id="12" type="reserved1"/>
+        <field name="reason" id="13" type="string4"/>
     </message>
 
 

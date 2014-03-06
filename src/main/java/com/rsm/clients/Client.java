@@ -53,6 +53,7 @@ public class Client {
     private final TimestampSecondsCommand timestampSecondsCommand = new TimestampSecondsCommand();
     private final SystemEventCommand systemEventCommand = new SystemEventCommand();
     private final StockDirectoryCommand stockDirectoryCommand = new StockDirectoryCommand();
+    private final StockTradingActionCommand stockTradingActionCommand = new StockTradingActionCommand();
 
     private final ByteBuf byteBuf = Unpooled.directBuffer(1024);
 
@@ -103,6 +104,7 @@ public class Client {
         DirectBuffer commandDirectBuffer = new DirectBuffer(commandBuffer);
 
         long seq = 0;
+        int tempLength;
         while(true) {
             log.info("position="+position);
 
@@ -144,9 +146,22 @@ public class Client {
                     retrievedItchMessageType = stockDirectoryMessage.messageType();
                     assert(retrievedItchMessageType == itchMessageType);
                     long nanoseconds = stockDirectoryMessage.nanoseconds();
-                    stockDirectoryMessage.getStock(temp, 0);
+                    tempLength = stockDirectoryMessage.getStock(temp, 0);
+                    byte marketCategory = stockDirectoryMessage.marketCategory();
+                    byte financialStatusIndicator = stockDirectoryMessage.financialStatusIndicator();
+                    long roundLotSize = stockDirectoryMessage.roundLotSize();
+                    YesNoType yesNo = stockDirectoryMessage.roundLotsOnly();
                     log.info("[nanoseconds="+nanoseconds+"][stock="+new String(temp, 0, StockDirectoryMessage.stockLength())+"]");
                     //TODO create command and send command over datagram channel
+                    break;
+                case STOCK_TRADING_ACTION:
+                    stockTradingActionCommand.wrapForDecode(directBuffer, (int)position, stockTradingActionCommand.sbeBlockLength(), stockTradingActionCommand.sbeSchemaVersion());
+                    retrievedItchMessageType = stockTradingActionCommand.messageType();
+                    assert(retrievedItchMessageType == itchMessageType);
+                    tempLength = stockTradingActionCommand.getStock(temp, 0);
+                    TradingStateType tradingState = stockTradingActionCommand.tradingState();
+                    byte reserved = stockTradingActionCommand.reserved();
+                    tempLength = stockTradingActionCommand.getReason(temp, 0);
                     break;
                 default:
                     log.error("Unhandled type: " + (char)messageType);
