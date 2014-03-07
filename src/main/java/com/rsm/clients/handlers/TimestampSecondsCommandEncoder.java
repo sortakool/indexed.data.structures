@@ -47,7 +47,7 @@ public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<Time
 
     @Override
     protected void encode(ChannelHandlerContext ctx, TimestampSecondsMessage msg, List<Object> out) throws Exception {
-        logger.info("Sending some stuff");
+//        logger.info("Sending some stuff");
 
         counter++;
 

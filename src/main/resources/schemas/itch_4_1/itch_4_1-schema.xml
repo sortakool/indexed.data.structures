@@ -28,6 +28,7 @@
         <type name="seconds" primitiveType="uint32" timeUnit="seconds"/>
         <type name="sequence" primitiveType="uint64" description="Sequence number for the event in the stream."/>
         <type name="symbol" length="8" primitiveType="char"/>
+        <type name="mpid" length="4" primitiveType="char"/>
         <type name="reserved1" primitiveType="char"/>
         <type name="string2" length="2" primitiveType="char"/>
         <type name="string3" length="3" primitiveType="char"/>
@@ -53,8 +54,20 @@
             <validValue name="SYSTEM_EVENT">S</validValue><!--83-->
             <validValue name="STOCK_DIRECTORY">R</validValue><!--82-->
             <validValue name="STOCK_TRADING_ACTION">H</validValue><!---->
-            <validValue name="REG_SHO_SHORT_SALE">Y</validValue><!---->
+            <validValue name="REG_SHO_RESTRICTION">Y</validValue><!---->
             <validValue name="MARKET_PARTICIPANT_POSITION">L</validValue><!---->
+            <validValue name="ADD_ORDER_NO_MPID_ATTRIBUTION">A</validValue><!---->
+            <validValue name="ADD_ORDER_WITH_MPID_ATTRIBUTION">F</validValue><!---->
+            <validValue name="ORDER_EXECUTED">E</validValue><!---->
+            <validValue name="ORDER_EXECUTED_WITH_PRICE">C</validValue><!---->
+            <validValue name="ORDER_CANCEL">X</validValue><!---->
+            <validValue name="ORDER_DELETE">D</validValue><!---->
+            <validValue name="ORDER_REPLACE">U</validValue><!---->
+            <validValue name="TRADE_MESSAGE_NON_CROSS">P</validValue><!---->
+            <validValue name="CROSS_TRADE">Q</validValue><!---->
+            <validValue name="BROKEN_TRADE">B</validValue><!---->
+            <validValue name="NOII">I</validValue><!---->
+            <validValue name="RETAIL_INTEREST">N</validValue><!---->
         </enum>
         <enum name="YesNoType" encodingType="char" semanticType="char">
             <validValue name="YES">Y</validValue>
@@ -65,6 +78,26 @@
             <validValue name="PAUSED" description="Paused across all U.S. equity markets/SROs (NASDAQ-listed securities only)">P</validValue>
             <validValue name="QUOTATION" description="Quotation only period for cross-SRO halt or pause">Q</validValue>
             <validValue name="TRADING" description="Trading on NASDAQ">T</validValue>
+        </enum>
+        <enum name="RegSHOShortSalePriceTestRestriction" encodingType="char" semanticType="char">
+            <validValue name="NO_PRICE_TEST_IN_PLACE" description="No price test in place">0</validValue>
+            <validValue name="IN_EFFECT_DUE_TO_AN_INTRADAY_PRICE_DROP_IN_SECURITY" description="Reg SHO Short Sale Price Test Restriction in effect due to an intra-day price drop in security">1</validValue>
+            <validValue name="QUOTATION" description="">2</validValue>
+            <validValue name="TEST_RESTRICTION_REMAINS_IN_EFFECT" description="Reg SHO Short Sale Price Test Restriction remains in effect">T</validValue>
+        </enum>
+        <enum name="MarketMakerMode" encodingType="char" semanticType="char" description="Indicates the quoting participant’s registration status in relation to SEC Rules 101 and 104 of Regulation M">
+            <validValue name="NORMAL">N</validValue>
+            <validValue name="PASSIVE">P</validValue>
+            <validValue name="SYNDICATE">S</validValue>
+            <validValue name="PRE_SYNDICATE">R</validValue>
+            <validValue name="PENALTY">L</validValue>
+        </enum>
+        <enum name="MarketParticipantState" encodingType="char" semanticType="char" description="Indicates the market participant’s current registration status in the issue">
+            <validValue name="ACTIVE">A</validValue>
+            <validValue name="EXCUSED_WITHDRAWN">E</validValue>
+            <validValue name="WITHDRAWN">W</validValue>
+            <validValue name="SUSPENDED">S</validValue>
+            <validValue name="DELETED">D</validValue>
         </enum>
     </types>
 
@@ -155,7 +188,6 @@
         <field name="tradingState" id="11" type="TradingStateType"/>
         <field name="reserved" id="12" type="reserved1"/>
         <field name="reason" id="13" type="string4"/>
-
     </message>
     <message name="StockTradingActionCommand" id="1072" description="StockTradingAction Command">
         <field name="streamHeader" id="1" type="streamHeader"/>
@@ -177,6 +209,68 @@
         <field name="tradingState" id="11" type="TradingStateType"/>
         <field name="reserved" id="12" type="reserved1"/>
         <field name="reason" id="13" type="string4"/>
+    </message>
+
+
+    <!-- RegSHORestriction -->
+    <message name="RegSHORestrictionMessage" id="89" description="RegSHORestriction"><!-- Y -->
+        <!-- payload -->
+        <field name="messageType" id="1" type="ITCHMessageType"/>
+        <field name="timestampNanoseconds" id="5" type="timestamp" timeUnit="timestamp"/>
+        <field name="stock" id="6" type="symbol"/>
+        <field name="regSHOAction" id="14" type="RegSHOShortSalePriceTestRestriction"/>
+    </message>
+    <message name="RegSHORestrictionCommand" id="1089" description="RegSHORestriction Command">
+        <field name="streamHeader" id="1" type="streamHeader"/>
+        <!-- payload -->
+        <field name="messageType" id="1" type="ITCHMessageType"/>
+        <field name="timestampNanoseconds" id="5" type="timestamp" timeUnit="timestamp"/>
+        <field name="stock" id="6" type="symbol"/>
+        <field name="regSHOAction" id="14" type="RegSHOShortSalePriceTestRestriction"/>
+    </message>
+    <message name="RegSHORestrictionEvent" id="2089" description="RegSHORestriction Event">
+        <field name="sequence" id="1" type="sequence"/>
+        <field name="streamHeader" id="2" type="streamHeader"/>
+        <!-- payload -->
+        <field name="messageType" id="1" type="ITCHMessageType"/>
+        <field name="timestampNanoseconds" id="5" type="timestamp" timeUnit="timestamp"/>
+        <field name="stock" id="6" type="symbol"/>
+        <field name="regSHOAction" id="14" type="RegSHOShortSalePriceTestRestriction"/>
+    </message>
+
+    <!-- MarketParticipantPosition -->
+    <message name="MarketParticipantPositionMessage" id="76" description="MarketParticipantPosition"><!-- L -->
+        <!-- payload -->
+        <field name="messageType" id="1" type="ITCHMessageType"/>
+        <field name="timestampNanoseconds" id="5" type="timestamp" timeUnit="timestamp"/>
+        <field name="mpid" id="15" type="mpid"/>
+        <field name="stock" id="6" type="symbol"/>
+        <field name="primaryMarketMaker" id="16" type="YesNoType"/>
+        <field name="marketMakerMode" id="17" type="MarketMakerMode"/>
+        <field name="marketParticipantState" id="18" type="MarketParticipantState"/>
+    </message>
+    <message name="MarketParticipantPositionCommand" id="1076" description="MarketParticipantPosition Command">
+        <field name="streamHeader" id="1" type="streamHeader"/>
+        <!-- payload -->
+        <field name="messageType" id="1" type="ITCHMessageType"/>
+        <field name="timestampNanoseconds" id="5" type="timestamp" timeUnit="timestamp"/>
+        <field name="mpid" id="15" type="mpid"/>
+        <field name="stock" id="6" type="symbol"/>
+        <field name="primaryMarketMaker" id="16" type="YesNoType"/>
+        <field name="marketMakerMode" id="17" type="MarketMakerMode"/>
+        <field name="marketParticipantState" id="18" type="MarketParticipantState"/>
+    </message>
+    <message name="MarketParticipantPositionEvent" id="2076" description="MarketParticipantPosition Event">
+        <field name="sequence" id="1" type="sequence"/>
+        <field name="streamHeader" id="2" type="streamHeader"/>
+        <!-- payload -->
+        <field name="messageType" id="1" type="ITCHMessageType"/>
+        <field name="timestampNanoseconds" id="5" type="timestamp" timeUnit="timestamp"/>
+        <field name="mpid" id="15" type="mpid"/>
+        <field name="stock" id="6" type="symbol"/>
+        <field name="primaryMarketMaker" id="16" type="YesNoType"/>
+        <field name="marketMakerMode" id="17" type="MarketMakerMode"/>
+        <field name="marketParticipantState" id="18" type="MarketParticipantState"/>
     </message>
 
 

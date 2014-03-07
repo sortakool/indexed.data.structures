@@ -70,12 +70,12 @@ public class ItchParser2 {
                     long seconds = timestampSecondsMessage.seconds();
                     log.info("[seconds="+seconds+"]");
 
-                    //create command
-                    TimestampSecondsType timestampSecondsType = new TimestampSecondsType();
-                    timestampSecondsType.wrap(directBuffer, (int)position, timestampSecondsMessage.sbeSchemaVersion());
-                    long seconds1 = timestampSecondsType.seconds();
-                    log.info("[seconds="+seconds1+"]");
-                    assert (seconds == seconds1);
+//                    //create command
+//                    TimestampSecondsType timestampSecondsType = new TimestampSecondsType();
+//                    timestampSecondsType.wrap(directBuffer, (int)position, timestampSecondsMessage.sbeSchemaVersion());
+//                    long seconds1 = timestampSecondsType.seconds();
+//                    log.info("[seconds="+seconds1+"]");
+//                    assert (seconds == seconds1);
 
                     TimestampSecondsCommand timestampSecondsCommand = new TimestampSecondsCommand();
                     timestampSecondsCommand.wrapForEncode(commandDirectBuffer, 0);
