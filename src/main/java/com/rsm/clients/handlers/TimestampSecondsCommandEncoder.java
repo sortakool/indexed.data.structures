@@ -7,6 +7,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.socket.DatagramPacket;
 import io.netty.handler.codec.MessageToByteEncoder;
 import io.netty.handler.codec.MessageToMessageEncoder;
+import io.netty.util.ReferenceCountUtil;
 import org.apache.log4j.Logger;
 import uk.co.real_logic.sbe.codec.java.DirectBuffer;
 
@@ -40,7 +41,7 @@ public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<Time
         this.byteBuffer = byteBuf.nioBuffer(0, this.byteBuf.capacity());
         this.commandDirectBuffer = new DirectBuffer(byteBuffer);
         this.remoteAddress = remoteAddress;
-        datagramPacket = new DatagramPacket(byteBuf, remoteAddress);
+        datagramPacket = new DatagramPacket(this.byteBuf, remoteAddress);
 
         this.counter = 0;//should be source specific id sequence
     }
@@ -65,18 +66,22 @@ public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<Time
                 .ref(counter)
         ;
         timestampSecondsCommand.messageType(msg.messageType());
-        timestampSecondsCommand.seconds(msg.seconds());
+        long seconds = msg.seconds();
+        timestampSecondsCommand.seconds(seconds);
 
         int size = timestampSecondsCommand.size();
         byteBuffer.position(size);
         byteBuffer.flip();
 
-
-
         byteBuf.writeBytes(byteBuffer);
 
         out.add(datagramPacket);
+        ReferenceCountUtil.retain(this.byteBuf);
+        ReferenceCountUtil.retain(msg);
+        ReferenceCountUtil.retain(datagramPacket);
 //        ctx.channel().flush();
+
+        logger.info("[counter="+counter+"][seconds="+seconds+"]");
 
     }
 }

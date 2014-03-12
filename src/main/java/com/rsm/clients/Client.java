@@ -42,7 +42,9 @@ public class Client {
     private int port = 9999;
     private int counter = 0;
     private String mCastGroup = "FF02:0:0:0:0:0:0:3";
+//    private String mCastGroup = "230.0.0.1";
     private String name = "test";
+    private DatagramChannel datagramChannel;
 
     private final TimestampSecondsMessage timestampSecondsMessage = new TimestampSecondsMessage();
     private final SystemEventMessage systemEventMessage = new SystemEventMessage();
@@ -69,17 +71,18 @@ public class Client {
         bootstrap = new Bootstrap();
         bootstrap.group(group)
                 .channel(NioDatagramChannel.class)
-                .option(ChannelOption.SO_BROADCAST, true)
-                .option(ChannelOption.SO_REUSEADDR, true)
                 .option(ChannelOption.IP_MULTICAST_IF, NetUtil.LOOPBACK_IF)
+                .option(ChannelOption.SO_REUSEADDR, true)
                 .handler(new ChannelInitializer<DatagramChannel>() {
 
                     @Override
                     protected void initChannel(DatagramChannel ch) throws Exception {
 //                        ch.pipeline().addLast(new LoggingHandler())
 //                                .addLast(new MoldCommandOutgoingHandler())
-//                                .addLast(new DatagramWrapperHandler(groupAddress));
-                        ch.pipeline().addLast(new LoggingHandler())
+//                                .addLast(new DatagramWrapperHandler(groupAddress))
+//                        ;
+                        ch.pipeline()
+                                .addLast(new LoggingHandler())
                                 .addLast(new TimestampSecondsCommandEncoder(byteBuf, groupAddress));
                     }
                 }).localAddress(port);
@@ -87,7 +90,7 @@ public class Client {
     }
 
     public void run() throws Exception {
-        DatagramChannel ch = (DatagramChannel) bootstrap.bind().sync().channel();
+        this.datagramChannel = (DatagramChannel) bootstrap.bind().sync().channel();
 
 
         //we do not need to join the multicast unless we want to get messages
@@ -134,7 +137,8 @@ public class Client {
                     long seconds = timestampSecondsMessage.seconds();
 //                    log.info("[seconds="+seconds+"]");
 
-                    ch.writeAndFlush(timestampSecondsMessage);
+//                    datagramChannel.writeAndFlush(timestampSecondsMessage);
+                    datagramChannel.write(timestampSecondsMessage);
 
                     break;
                 case SYSTEM_EVENT:

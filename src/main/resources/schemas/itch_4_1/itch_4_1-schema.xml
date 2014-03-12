@@ -27,16 +27,16 @@
         <type name="timestamp" primitiveType="uint32" timeUnit="nanosecond" semanticType="UTCTimestamp"/>
         <type name="seconds" primitiveType="uint32" timeUnit="seconds"/>
         <type name="sequence" primitiveType="uint64" description="Sequence number for the event in the stream."/>
-        <type name="symbol" length="8" primitiveType="char"/>
-        <type name="mpid" length="4" primitiveType="char"/>
-        <type name="reserved1" primitiveType="char"/>
-        <type name="string2" length="2" primitiveType="char"/>
-        <type name="string3" length="3" primitiveType="char"/>
-        <type name="string4" length="4" primitiveType="char"/>
-        <type name="string5" length="5" primitiveType="char"/>
-        <type name="string6" length="6" primitiveType="char"/>
-        <type name="string7" length="7" primitiveType="char"/>
-        <type name="string8" length="8" primitiveType="char"/>
+        <type name="symbol" length="8" primitiveType="char" characterEncoding="ASCII"/>
+        <type name="mpid" length="4" primitiveType="char" characterEncoding="ASCII"/>
+        <type name="reserved1" primitiveType="char" characterEncoding="ASCII"/>
+        <type name="string2" length="2" primitiveType="char" characterEncoding="ASCII"/>
+        <type name="string3" length="3" primitiveType="char" characterEncoding="ASCII"/>
+        <type name="string4" length="4" primitiveType="char" characterEncoding="ASCII"/>
+        <type name="string5" length="5" primitiveType="char" characterEncoding="ASCII"/>
+        <type name="string6" length="6" primitiveType="char" characterEncoding="ASCII"/>
+        <type name="string7" length="7" primitiveType="char" characterEncoding="ASCII"/>
+        <type name="string8" length="8" primitiveType="char" characterEncoding="ASCII"/>
 
 
         <composite name="streamHeader">
