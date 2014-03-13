@@ -23,6 +23,7 @@ import java.util.List;
 public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<TimestampSecondsMessage> {
     Logger logger = Logger.getLogger(this.getClass());
 
+    final MoldUDP64Packet moldUDP64Packet = new MoldUDP64Packet();
     final TimestampSecondsCommand timestampSecondsCommand = new TimestampSecondsCommand();
 
     private int counter = 0;
@@ -34,6 +35,8 @@ public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<Time
     private final InetSocketAddress remoteAddress;
 
     private final long source = 1L; //convert a 8-bit ascii to a long
+
+    private final byte[] sessionBytes = "0123456789".getBytes();
 
 
     public TimestampSecondsCommandEncoder(ByteBuf byteBuf, InetSocketAddress remoteAddress) {
@@ -53,9 +56,28 @@ public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<Time
         counter++;
 
         byteBuf.clear();
+        int position;
+        position = byteBuf.writerIndex();
+
+        //create MoldUDP64 Packet
+        moldUDP64Packet.wrapForEncode(commandDirectBuffer, position);
+        // Downstream Packet Message Block
+        moldUDP64Packet.downstreamPacketHeader()
+                .putSession(sessionBytes, position)
+                .sequenceNumber(counter)
+                .messageCount(1);//hard code to 1 for now
+
+        position += moldUDP64Packet.size();
+
+        //messageLength
+        commandDirectBuffer.putShort(position, (short)timestampSecondsCommand.sbeBlockLength(), java.nio.ByteOrder.BIG_ENDIAN);
+        position += 2;
 
         //create command
-        timestampSecondsCommand.wrapForEncode(commandDirectBuffer, byteBuffer.position());
+        timestampSecondsCommand.wrapForEncode(commandDirectBuffer, position);
+        //Downstream Packet Message Block
+        //MessageData
+        // StreamHeader
         StreamHeader streamHeader = timestampSecondsCommand.streamHeader();
         streamHeader
                 .timestampNanos(System.nanoTime())
@@ -70,7 +92,8 @@ public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<Time
         timestampSecondsCommand.seconds(seconds);
 
         int size = timestampSecondsCommand.size();
-        byteBuffer.position(size);
+        position += size;
+        byteBuffer.position(position);
         byteBuffer.flip();
 
         byteBuf.writeBytes(byteBuffer);
@@ -80,6 +103,7 @@ public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<Time
         ReferenceCountUtil.retain(msg);
         ReferenceCountUtil.retain(datagramPacket);
 //        ctx.channel().flush();
+        ctx.channel().flush();
 
         logger.info("[counter="+counter+"][seconds="+seconds+"]");
 

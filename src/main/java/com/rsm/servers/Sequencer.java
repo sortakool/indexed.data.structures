@@ -1,5 +1,6 @@
 package com.rsm.servers;
 
+import com.rsm.servers.handlers.MoldUDP64Decoder;
 import com.rsm.servers.handlers.TimestampSecondsCommandDecoder;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
@@ -21,8 +22,9 @@ public class Sequencer {
 
     private int port = 9999;
 
-    private String mCastGroup = "FF02:0:0:0:0:0:0:3";
-//    private String mCastGroup = "230.0.0.1";
+    private String commandMulticastcastGroup = "FF02:0:0:0:0:0:0:3";
+    private String eventMulticastcastGroup = "FF02:0:0:0:0:0:0:4";
+//    private String commandMulticastcastGroup = "230.0.0.1";
 
     //we need two
     private final ByteBuf eventByteBuf = Unpooled.directBuffer(1024);
@@ -42,7 +44,8 @@ public class Sequencer {
                         protected void initChannel(Channel channel) throws Exception {
                             ChannelPipeline pipeline = channel.pipeline();
                             pipeline.addLast(new LoggingHandler());
-                            pipeline.addLast(new TimestampSecondsCommandDecoder(eventByteBuf));
+//                            pipeline.addLast(new TimestampSecondsCommandDecoder(eventByteBuf));
+                            pipeline.addLast(new MoldUDP64Decoder(eventByteBuf));
                         }
                     })
                     .localAddress(port)
@@ -50,9 +53,15 @@ public class Sequencer {
 //                    .handler(new TimestampSecondsCommandDecoder(eventByteBuf));
 
             DatagramChannel channel = (DatagramChannel) bootstrap.bind().sync().channel();
-            InetSocketAddress groupAddress = new InetSocketAddress(mCastGroup, port);
+            InetSocketAddress groupAddress = new InetSocketAddress(commandMulticastcastGroup, port);
 
-            channel.joinGroup(groupAddress, NetUtil.LOOPBACK_IF).sync();
+            ChannelFuture channelFuture = channel.joinGroup(groupAddress, NetUtil.LOOPBACK_IF).sync();
+            channelFuture.addListener(new ChannelFutureListener() {
+                @Override
+                public void operationComplete(ChannelFuture future) throws Exception {
+                    System.out.println("done with " + future);
+                }
+            });
 
             channel.closeFuture().await();
 

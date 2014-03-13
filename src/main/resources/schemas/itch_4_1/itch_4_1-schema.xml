@@ -37,7 +37,18 @@
         <type name="string6" length="6" primitiveType="char" characterEncoding="ASCII"/>
         <type name="string7" length="7" primitiveType="char" characterEncoding="ASCII"/>
         <type name="string8" length="8" primitiveType="char" characterEncoding="ASCII"/>
+        <type name="string9" length="9" primitiveType="char" characterEncoding="ASCII"/>
+        <type name="string10" length="10" primitiveType="char" characterEncoding="ASCII"/>
+        <type name="session" length="10" primitiveType="char" characterEncoding="ASCII" description="Indicates the session to which this packet belongs."/>
+        <type name="messageCount" primitiveType="uint16" description="The count of messages contained in this packet."/>
+        <type name="messageLength" primitiveType="uint16" description="Indicates the length in bytes of the message contained in this Message Block."/>
 
+
+        <composite name="downstreamPacketHeader">
+            <type name="session" length="10" primitiveType="char" characterEncoding="ASCII" description="Indicates the session to which this packet belongs."/>
+            <type name="sequenceNumber" primitiveType="uint64" description="The sequence number of the first message in the packet."/>
+            <type name="messageCount" primitiveType="uint16" description="The count of messages contained in this packet."/>
+        </composite>
 
         <composite name="streamHeader">
             <type name="timestampNanos" primitiveType="uint64" timeUnit="nanosecond" semanticType="UTCTimestamp"/>
@@ -100,6 +111,10 @@
             <validValue name="DELETED">D</validValue>
         </enum>
     </types>
+
+    <message name="MoldUDP64Packet" id="3000" description="MoldUDP64 Packet">
+        <field name="downstreamPacketHeader" id="3001" type="downstreamPacketHeader"/>
+    </message>
 
     <!-- TimestampSeconds -->
     <message name="TimestampSecondsMessage" id="84" description="TimestampSeconds"><!-- T -->
