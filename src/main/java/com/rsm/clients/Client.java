@@ -114,7 +114,7 @@ public class Client {
         long seq = 0;
         int tempLength;
         while(true) {
-//            log.info("position="+position);
+//            log.info("filePosition="+filePosition);
 
             int messageLength = directBuffer.getShort((int) position, ByteOrder.BIG_ENDIAN);
             if(messageLength == 0) {
@@ -122,7 +122,7 @@ public class Client {
             }
             seq++;
 
-            position += 2;  //move position past length
+            position += 2;  //move filePosition past length
 
             byte messageType = directBuffer.getByte((int)position);
             ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);

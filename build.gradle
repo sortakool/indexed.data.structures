@@ -18,6 +18,7 @@ dependencies {
     compile 'it.unimi.dsi:fastutil:6.5.12'
     compile 'io.netty:netty-all:5.0.0.Alpha1'
     compile 'uk.co.real_logic:sbe:0.1-SNAPSHOT'
+    compile 'joda-time:joda-time:2.3'
 }
 
 task runClient(type: JavaExec) {
