@@ -1,5 +1,6 @@
 package com.rsm.servers;
 
+import com.rsm.message.nasdaq.itch.v4_1.ITCHMessageType;
 import com.rsm.message.nasdaq.itch.v4_1.MoldUDP64Packet;
 import com.rsm.message.nasdaq.itch.v4_1.StreamHeader;
 import org.apache.log4j.LogManager;
@@ -118,6 +119,7 @@ public class Sequencer2 {
                             int bytesRead = commandDirectBuffer.getBytes(commandPosition, payloadBytes, 0, payloadSize);
                             assert (bytesRead == payloadSize);
                             byte messageType = commandDirectBuffer.getByte(commandPosition);
+                            ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
                             commandPosition += payloadSize;
                             commandByteBuffer.position(commandPosition);
 
@@ -130,7 +132,7 @@ public class Sequencer2 {
                                         .append("[streamHeaderSize=").append(streamHeaderSize).append("]")
                                         .append("[messageLength=").append(messageLength).append("]")
                                         .append("[bytesRead=").append(bytesRead).append("]")
-                                        .append("[messageType=").append((char)messageType).append("]")
+                                        .append("[itchMessageType=").append(itchMessageType).append("]")
                                 ;
                                 log.info(sb.toString());
                             }

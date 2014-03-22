@@ -1,6 +1,7 @@
 package com.rsm.clients;
 
 import com.rsm.buffer.MappedFileBuffer;
+import com.rsm.message.nasdaq.itch.v4_1.ITCHMessageType;
 import com.rsm.message.nasdaq.itch.v4_1.MoldUDP64Packet;
 import com.rsm.message.nasdaq.itch.v4_1.StreamHeader;
 import org.apache.log4j.LogManager;
@@ -168,6 +169,7 @@ public class Client5 {
                         assert (bytesRead == messageLength);
                         byte fileMessageType = fileDirectBuffer.getByte((int)filePosition);
                         byte messageType = commandDirectBuffer.getByte((int)commandPosition);
+                        ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
 
                         commandPosition += bytesRead;
 //                        commandByteBuffer.position((int)startingCommandPosition);
@@ -186,7 +188,7 @@ public class Client5 {
                                .append("[streamHeaderSize=").append(streamHeaderSize).append("]")
                                .append("[messageLength=").append(messageLength).append("]")
                                .append("[bytesSent=").append(bytesSent).append("]")
-                               .append("[messageType=").append((char)messageType).append("]")
+                               .append("[itchMessageType=").append(itchMessageType).append("]")
                             ;
                             log.info(sb.toString());
                         }
