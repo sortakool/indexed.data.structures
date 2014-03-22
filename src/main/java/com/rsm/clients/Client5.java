@@ -2,15 +2,13 @@ package com.rsm.clients;
 
 import com.rsm.buffer.MappedFileBuffer;
 import com.rsm.message.nasdaq.itch.v4_1.MoldUDP64Packet;
+import com.rsm.message.nasdaq.itch.v4_1.StreamHeader;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import uk.co.real_logic.sbe.codec.java.DirectBuffer;
 
 import java.io.File;
-import java.net.InetSocketAddress;
-import java.net.NetworkInterface;
-import java.net.StandardProtocolFamily;
-import java.net.StandardSocketOptions;
+import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
@@ -36,7 +34,12 @@ public class Client5 {
     int MULTICAST_PORT = 9999;
 
     private final MoldUDP64Packet moldUDP64Packet = new MoldUDP64Packet();
+    private final StreamHeader streamHeader = new StreamHeader();
+    private final int streamHeaderVersion = 1;
     private final byte[] sessionBytes = "0123456789".getBytes();
+
+    private final byte[] sourceBytes = "9876543210".getBytes();
+    private final long source = 33434L;//TODO convert sourceBytes to long
 
     Path path;
     File file;
@@ -51,10 +54,14 @@ public class Client5 {
 
     private int sequence = 0;
 
+    DatagramChannel server = null;
+
     public Client5() throws Exception {
         path = Paths.get(System.getProperty("user.home") + "/Downloads/11092013.NASDAQ_ITCH41");
         file = path.toFile();
         fileBuffer = new MappedFileBuffer(file);
+        long fileSize = file.length();
+        fileBuffer = new MappedFileBuffer(file, MappedFileBuffer.MAX_SEGMENT_SIZE, fileSize, MappedFileBuffer.MAX_SEGMENT_SIZE, true, false);
         filePosition = fileBuffer.position();
         long capacity = fileBuffer.capacity();
         fileByteBuffer = fileBuffer.buffer(filePosition);
@@ -69,22 +76,12 @@ public class Client5 {
         InetSocketAddress group = new InetSocketAddress(MULTICAST_IP, MULTICAST_PORT);
 
 
-        DatagramChannel server = null;
+
         try {
             server = DatagramChannel.open(StandardProtocolFamily.INET6);
             server.bind(null);
+            NetworkInterface networkInterface = getNetworkInterface();
 
-            // Get the reference of a network interface
-            NetworkInterface networkInterface = null;
-            Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
-            while(networkInterfaces.hasMoreElements()) {
-                NetworkInterface nextNetworkInterface = networkInterfaces.nextElement();
-                log.info(nextNetworkInterface);
-                if(nextNetworkInterface.supportsMulticast()) {
-                    networkInterface = nextNetworkInterface;
-//                break;
-                }
-            }
 
             int mtu = networkInterface.getMTU();
             log.info("mtu=" + mtu);
@@ -117,18 +114,23 @@ public class Client5 {
 
                     }
                     else if (key.isWritable()) {
+                        commandByteBuffer.clear();
+                        commandPosition = commandByteBuffer.position();
+                        fileByteBuffer.position((int)filePosition);
+                        fileByteBuffer.limit(fileByteBuffer.capacity());
                         short messageLength = fileDirectBuffer.getShort((int) filePosition, ByteOrder.BIG_ENDIAN);
                         if(messageLength == 0) {
                             active = false;
                         }
-                        long nextPosition = filePosition + 2 + messageLength;
-                        fileByteBuffer.position((int) filePosition);
-                        if(nextPosition > Integer.MAX_VALUE) {
-                            throw new IllegalArgumentException("Invalid position " + nextPosition);
+                        filePosition += 2;
+                        fileByteBuffer.position((int)filePosition);
+                        long nextFilePosition = filePosition + messageLength;
+                        if(nextFilePosition > Integer.MAX_VALUE) {
+                            throw new IllegalArgumentException("Invalid position " + nextFilePosition);
                         }
-                        fileByteBuffer.limit((int) nextPosition);
+                        fileByteBuffer.limit((int) nextFilePosition);
 
-                        //create MoldUDP64 Packet
+                        //write MoldUDP64 Packet
                         long startingCommandPosition = commandPosition;
                         moldUDP64Packet.wrapForEncode(commandDirectBuffer, (int)commandPosition);
                         // Downstream Packet Message Block
@@ -137,21 +139,59 @@ public class Client5 {
                                 .sequenceNumber(++sequence)
                                 .messageCount(1);//hard code to 1 for now
                         int moldUDP64PacketLength = moldUDP64Packet.size();
-                        commandByteBuffer.position((int)startingCommandPosition);
+                        commandPosition += moldUDP64PacketLength;
+                        commandByteBuffer.position((int)commandPosition);
+
+                        //downstream packet message block
+                        int streamHeaderSize = streamHeader.size();
+                        short totalMessageSize = (short)(streamHeaderSize + messageLength);
                         //messageLength
-                        commandDirectBuffer.putShort((int)commandPosition, messageLength, ByteOrder.BIG_ENDIAN);
-                        int bytesRead = commandDirectBuffer.getBytes((int) commandPosition, fileByteBuffer, messageLength);
+                        commandDirectBuffer.putShort((int)commandPosition, totalMessageSize, ByteOrder.BIG_ENDIAN);
+                        commandPosition += 2;
+                        commandByteBuffer.position((int)commandPosition);
+
+                        //streamHeader
+                        long streamHeaderPosition = commandPosition;
+                        streamHeader.wrap(commandDirectBuffer, (int)streamHeaderPosition, streamHeaderVersion);
+                        streamHeader.timestampNanos(System.nanoTime());
+                        streamHeader.major((byte)'A');
+                        streamHeader.minor((byte)'B');
+                        streamHeader.source(source);
+                        streamHeader.id(sequence);
+                        streamHeader.ref(9999L);
+                        commandPosition += streamHeaderSize;
+                        commandByteBuffer.position((int)commandPosition);
+
+                        //payload
+                        int bytesRead = fileDirectBuffer.getBytes((int) filePosition, commandByteBuffer, messageLength);
+//                        int bytesRead = fileDirectBuffer.putBytes((int)filePosition, commandByteBuffer, messageLength);
                         assert (bytesRead == messageLength);
-                        commandByteBuffer.position((int)startingCommandPosition);
-                        int nextCommandLimit = moldUDP64PacketLength + 2 + messageLength;
-                        commandByteBuffer.limit(nextCommandLimit);
+                        byte fileMessageType = fileDirectBuffer.getByte((int)filePosition);
+                        byte messageType = commandDirectBuffer.getByte((int)commandPosition);
+
+                        commandPosition += bytesRead;
+//                        commandByteBuffer.position((int)startingCommandPosition);
+//                        int nextCommandLimit = moldUDP64PacketLength + 2 + messageLength;
+//                        commandByteBuffer.limit(nextCommandLimit);
+                        commandByteBuffer.position((int)commandPosition);
+                        commandByteBuffer.flip();
 
                         int bytesSent = server.send(commandByteBuffer, group);
-                        if(sequence % 1000000 == 0) {
-                            log.info("[seq=" + sequence + "][filePosition="+filePosition+"][messageLength=" + messageLength + "][bytesSent=" + bytesSent + "]");
+                        if((sequence <= 10) || (sequence % 1000000 == 0)) {
+                            StringBuilder sb = new StringBuilder();
+                            sb
+                               .append("[seq=").append(sequence).append("]")
+                               .append("[filePosition=").append(filePosition).append("]")
+                               .append("[moldUDP64PacketLength=").append(moldUDP64PacketLength).append("]")
+                               .append("[streamHeaderSize=").append(streamHeaderSize).append("]")
+                               .append("[messageLength=").append(messageLength).append("]")
+                               .append("[bytesSent=").append(bytesSent).append("]")
+                               .append("[messageType=").append((char)messageType).append("]")
+                            ;
+                            log.info(sb.toString());
                         }
 
-                        filePosition = nextPosition;    //2 is for messageLength
+                        filePosition = nextFilePosition;    //2 is for messageLength
                     }
                 }
             }
@@ -160,6 +200,21 @@ public class Client5 {
         finally {
             server.close();
         }
+    }
+
+    private NetworkInterface getNetworkInterface() throws SocketException {
+        // Get the reference of a network interface
+        NetworkInterface networkInterface = null;
+        Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
+        while(networkInterfaces.hasMoreElements()) {
+            NetworkInterface nextNetworkInterface = networkInterfaces.nextElement();
+            log.info(nextNetworkInterface);
+            if(nextNetworkInterface.supportsMulticast()) {
+                networkInterface = nextNetworkInterface;
+//                break;
+            }
+        }
+        return networkInterface;
     }
 
     public static void main(String[] args) throws Exception {

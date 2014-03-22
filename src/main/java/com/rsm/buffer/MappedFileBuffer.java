@@ -51,7 +51,7 @@ implements BufferFacade, Cloneable
 
     private static final Logger log = LogManager.getLogger(MappedFileBuffer.class);
 
-    private final static int MAX_SEGMENT_SIZE = 0x8000000; // 1 GB, assures alignment
+    public final static int MAX_SEGMENT_SIZE = 0x8000000; // 1 GB, assures alignment
 
     public static final ByteOrder NATIVE_BYTE_ORDER = ByteOrder.nativeOrder();
 
