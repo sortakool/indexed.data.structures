@@ -18,7 +18,14 @@ dependencies {
     compile 'it.unimi.dsi:fastutil:6.5.12'
     compile 'io.netty:netty-all:5.0.0.Alpha1'
     compile 'uk.co.real_logic:sbe:0.1-SNAPSHOT'
-    compile 'joda-time:joda-time:2.3'
+
+    compile 'net.openhft:lang:6.3.3'
+    compile 'net.openhft:collections:3.0d'
+    compile 'net.openhft:compiler:2.1'
+    compile 'net.openhft:direct:0.1-SNAPSHOT'
+    compile 'net.openhft:TransFIX:1.0.0-SNAPSHOT'
+    compile 'net.openhft:affinity:2.0.1'
+    compile 'net.openhft:chronicle:2.0.3'
 }
 
 task runClient(type: JavaExec) {
