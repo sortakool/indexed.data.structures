@@ -224,7 +224,7 @@ public class Client3 {
                     // Downstream Packet Message Block
                     moldUDP64Packet.downstreamPacketHeader()
                             .putSession(sessionBytes, (int) filePosition)
-                            .sequenceNumber(counter)
+                            .sourceSequence(counter)
                             .messageCount(1);//hard code to 1 for now
                     int moldUDP64PacketLength = moldUDP64Packet.size();
                     commandByteBuffer.position((int)startingCommandPosition);

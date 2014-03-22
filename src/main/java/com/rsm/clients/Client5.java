@@ -1,6 +1,7 @@
 package com.rsm.clients;
 
 import com.rsm.buffer.MappedFileBuffer;
+import com.rsm.message.nasdaq.itch.v4_1.DownstreamPacketHeader;
 import com.rsm.message.nasdaq.itch.v4_1.ITCHMessageType;
 import com.rsm.message.nasdaq.itch.v4_1.MoldUDP64Packet;
 import com.rsm.message.nasdaq.itch.v4_1.StreamHeader;
@@ -18,6 +19,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.Set;
@@ -31,14 +33,17 @@ public class Client5 {
     private static final Logger log = LogManager.getLogger(Client5.class);
 
     //        String MULTICAST_IP = "239.1.1.1";
-    String MULTICAST_IP = "FF02:0:0:0:0:0:0:3";
-    int MULTICAST_PORT = 9999;
+    String COMMAND_MULTICAST_IP = "FF02:0:0:0:0:0:0:3";
+    int COMMAND_MULTICAST_PORT = 9000;
+
+    String EVENT_MULTICAST_IP = "FF02:0:0:0:0:0:0:4";
+    int EVENT_MULTICAST_PORT = 9001;
 
     private final MoldUDP64Packet moldUDP64Packet = new MoldUDP64Packet();
     private final StreamHeader streamHeader = new StreamHeader();
     private final int streamHeaderVersion = 1;
-    private final String sessionString = "0123456789";
-    private final byte[] sessionBytes = sessionString.getBytes();
+//    private final String sessionString = "0123456789";
+    private final byte[] sessionBytes = new byte[DownstreamPacketHeader.sessionLength()];
     private final String sourceString = "client  ";
     private final byte[] sourceBytes = sourceString.getBytes();
     private final long source = 33434L;//TODO convert sourceBytes to long
@@ -54,7 +59,7 @@ public class Client5 {
     DirectBuffer commandDirectBuffer;
     long commandPosition = 0;
 
-    private int sequence = 0;
+    private int sourceSequence = 0;
 
     DatagramChannel server = null;
 
@@ -71,13 +76,20 @@ public class Client5 {
         fileByteBuffer = fileBuffer.buffer(filePosition);
         fileDirectBuffer = new DirectBuffer(fileByteBuffer);
 
+        String fileName = file.getName();
+        String[] fileNameParts = fileName.split("\\.");
+        String session = fileNameParts[0];
+        Arrays.fill(sessionBytes, (byte)' ');
+        System.arraycopy(session.getBytes(), 0, sessionBytes, 0, session.getBytes().length);
+        String sessionString = new String(sessionBytes);
+
         commandByteBuffer = ByteBuffer.allocateDirect(2048);
 //        commandByteBuffer = ByteBuffer.allocate(2048);
         commandByteBuffer.order(ByteOrder.BIG_ENDIAN);
         commandDirectBuffer = new DirectBuffer(commandByteBuffer);
         commandPosition = 0;
 
-        InetSocketAddress group = new InetSocketAddress(MULTICAST_IP, MULTICAST_PORT);
+        InetSocketAddress group = new InetSocketAddress(COMMAND_MULTICAST_IP, COMMAND_MULTICAST_PORT);
 
 
 
@@ -140,7 +152,7 @@ public class Client5 {
                         // Downstream Packet Message Block
                         moldUDP64Packet.downstreamPacketHeader()
                                 .putSession(sessionBytes, (int) commandPosition)
-                                .sequenceNumber(++sequence)
+                                .sourceSequence(++sourceSequence)
                                 .messageCount(1);//hard code to 1 for now
                         int moldUDP64PacketLength = moldUDP64Packet.size();
                         commandPosition += moldUDP64PacketLength;
@@ -161,7 +173,7 @@ public class Client5 {
                         streamHeader.major((byte)'A');
                         streamHeader.minor((byte)'B');
                         streamHeader.source(source);
-                        streamHeader.id(sequence);
+                        streamHeader.id(sourceSequence);
                         streamHeader.ref(9999L);
                         commandPosition += streamHeaderSize;
                         commandByteBuffer.position((int)commandPosition);
@@ -182,11 +194,11 @@ public class Client5 {
                         commandByteBuffer.flip();
 
                         int bytesSent = server.send(commandByteBuffer, group);
-                        if((sequence <= 10) || (sequence % 1000000 == 0)) {
+                        if((sourceSequence <= 10) || (sourceSequence % 1000000 == 0)) {
                             StringBuilder sb = new StringBuilder();
                             sb
                                .append("[session=").append(sessionString).append("]")
-                               .append("[seq=").append(sequence).append("]")
+                               .append("[seq=").append(sourceSequence).append("]")
                                .append("[filePosition=").append(filePosition).append("]")
                                .append("[moldUDP64PacketLength=").append(moldUDP64PacketLength).append("]")
                                .append("[streamHeaderSize=").append(streamHeaderSize).append("]")
@@ -201,7 +213,7 @@ public class Client5 {
                     }
                 }
             }
-            log.info("finished with seq="+sequence);
+            log.info("finished with seq="+ sourceSequence);
         }
         finally {
             server.close();

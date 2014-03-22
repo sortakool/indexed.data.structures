@@ -64,7 +64,7 @@ public class TimestampSecondsCommandEncoder extends MessageToMessageEncoder<Time
         // Downstream Packet Message Block
         moldUDP64Packet.downstreamPacketHeader()
                 .putSession(sessionBytes, position)
-                .sequenceNumber(counter)
+                .sourceSequence(counter)
                 .messageCount(1);//hard code to 1 for now
 
         position += moldUDP64Packet.size();

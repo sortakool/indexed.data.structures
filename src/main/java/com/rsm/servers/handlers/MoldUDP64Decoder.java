@@ -56,7 +56,7 @@ public class MoldUDP64Decoder extends MessageToMessageDecoder<DatagramPacket> {
         moldUDP64Packet.wrapForDecode(commandDirectBuffer, position, MoldUDP64Packet.BLOCK_LENGTH, MoldUDP64Packet.SCHEMA_VERSION);
         Arrays.fill(sessionBytes, (byte)' ');
         moldUDP64Packet.downstreamPacketHeader().getSession(sessionBytes, 0);
-        long sequenceNumber = moldUDP64Packet.downstreamPacketHeader().sequenceNumber();
+        long sequenceNumber = moldUDP64Packet.downstreamPacketHeader().sourceSequence();
         int messageCount = moldUDP64Packet.downstreamPacketHeader().messageCount();
 
         position += moldUDP64Packet.size();

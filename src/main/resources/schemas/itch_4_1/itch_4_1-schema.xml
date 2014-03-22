@@ -46,7 +46,7 @@
 
         <composite name="downstreamPacketHeader">
             <type name="session" length="10" primitiveType="char" characterEncoding="ASCII" description="Indicates the session to which this packet belongs."/>
-            <type name="sequenceNumber" primitiveType="uint64" description="The sequence number of the first message in the packet."/>
+            <type name="sourceSequence" primitiveType="uint64" description="The sequence number of the first message in the packet for the particular source."/>
             <type name="messageCount" primitiveType="uint16" description="The count of messages contained in this packet."/>
         </composite>
 
@@ -113,6 +113,11 @@
     </types>
 
     <message name="MoldUDP64Packet" id="3000" description="MoldUDP64 Packet">
+        <field name="downstreamPacketHeader" id="3001" type="downstreamPacketHeader"/>
+    </message>
+
+    <message name="EventMoldUDP64Packet" id="4000" description="MoldUDP64 Packet">
+        <field name="eventSequence" id="4001" type="sequence" description="Source Sequence"/>
         <field name="downstreamPacketHeader" id="3001" type="downstreamPacketHeader"/>
     </message>
 
