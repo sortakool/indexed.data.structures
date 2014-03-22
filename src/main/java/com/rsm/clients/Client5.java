@@ -37,9 +37,10 @@ public class Client5 {
     private final MoldUDP64Packet moldUDP64Packet = new MoldUDP64Packet();
     private final StreamHeader streamHeader = new StreamHeader();
     private final int streamHeaderVersion = 1;
-    private final byte[] sessionBytes = "0123456789".getBytes();
-
-    private final byte[] sourceBytes = "9876543210".getBytes();
+    private final String sessionString = "0123456789";
+    private final byte[] sessionBytes = sessionString.getBytes();
+    private final String sourceString = "client  ";
+    private final byte[] sourceBytes = sourceString.getBytes();
     private final long source = 33434L;//TODO convert sourceBytes to long
 
     Path path;
@@ -58,6 +59,8 @@ public class Client5 {
     DatagramChannel server = null;
 
     public Client5() throws Exception {
+
+
         path = Paths.get(System.getProperty("user.home") + "/Downloads/11092013.NASDAQ_ITCH41");
         file = path.toFile();
         fileBuffer = new MappedFileBuffer(file);
@@ -182,6 +185,7 @@ public class Client5 {
                         if((sequence <= 10) || (sequence % 1000000 == 0)) {
                             StringBuilder sb = new StringBuilder();
                             sb
+                               .append("[session=").append(sessionString).append("]")
                                .append("[seq=").append(sequence).append("]")
                                .append("[filePosition=").append(filePosition).append("]")
                                .append("[moldUDP64PacketLength=").append(moldUDP64PacketLength).append("]")

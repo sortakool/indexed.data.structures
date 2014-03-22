@@ -1,11 +1,13 @@
 package com.rsm.servers;
 
+import com.rsm.message.nasdaq.itch.v4_1.DownstreamPacketHeader;
 import com.rsm.message.nasdaq.itch.v4_1.ITCHMessageType;
 import com.rsm.message.nasdaq.itch.v4_1.MoldUDP64Packet;
 import com.rsm.message.nasdaq.itch.v4_1.StreamHeader;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import uk.co.real_logic.sbe.codec.java.DirectBuffer;
+import uk.co.real_logic.sbe.util.BitUtil;
 
 import java.net.*;
 import java.nio.ByteBuffer;
@@ -38,11 +40,11 @@ public class Sequencer2 {
 
 
     private final MoldUDP64Packet moldUDP64Packet = new MoldUDP64Packet();
-    private final byte[] sessionBytes = new byte[10];
-    private final byte[] payloadBytes = new byte[1024];
-
     private final StreamHeader streamHeader = new StreamHeader();
     private final int streamHeaderVersion = 1;
+    private final byte[] sessionBytes = new byte[DownstreamPacketHeader.sessionLength()];
+    private final byte[] payloadBytes = new byte[1024];
+    private final byte[] sourceBytes = new byte[BitUtil.SIZE_OF_LONG];
 
     public Sequencer2() throws Exception {
         commandByteBuffer = ByteBuffer.allocateDirect(2048);
@@ -90,7 +92,7 @@ public class Sequencer2 {
                             moldUDP64Packet.wrapForDecode(commandDirectBuffer, commandPosition, MoldUDP64Packet.BLOCK_LENGTH, MoldUDP64Packet.SCHEMA_VERSION);
                             Arrays.fill(sessionBytes, (byte) ' ');
                             moldUDP64Packet.downstreamPacketHeader().getSession(sessionBytes, 0);
-                            long sequence = moldUDP64Packet.downstreamPacketHeader().sequenceNumber();
+                            long sourceSequence = moldUDP64Packet.downstreamPacketHeader().sequenceNumber();
                             int messageCount = moldUDP64Packet.downstreamPacketHeader().messageCount();
                             int moldUDP64PacketLength = moldUDP64Packet.size();
                             commandPosition += moldUDP64PacketLength;
@@ -123,11 +125,13 @@ public class Sequencer2 {
                             commandPosition += payloadSize;
                             commandByteBuffer.position(commandPosition);
 
-//                            log.info("[seq="+sequence+"][commandPosition="+commandPosition+"][messageLength="+messageLength+"]");
-                            if((sequence <= 10) || (sequence % 1000000 == 0)) {
+//                            log.info("[seq="+sourceSequence+"][commandPosition="+commandPosition+"][messageLength="+messageLength+"]");
+//                            if((sourceSequence <= 10) || (sourceSequence % 1000000 == 0)) {
+                            if((sourceSequence >= 0)) {
                                 StringBuilder sb = new StringBuilder();
                                 sb
-                                        .append("[seq=").append(sequence).append("]")
+                                        .append("[source=").append(source).append("]")
+                                        .append("[sourceSequence=").append(sourceSequence).append("]")
                                         .append("[moldUDP64PacketLength=").append(moldUDP64PacketLength).append("]")
                                         .append("[streamHeaderSize=").append(streamHeaderSize).append("]")
                                         .append("[messageLength=").append(messageLength).append("]")
