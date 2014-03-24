@@ -1,6 +1,9 @@
 package com.rsm.servers;
 
+import com.rsm.message.nasdaq.SequenceUtility;
 import com.rsm.message.nasdaq.itch.v4_1.*;
+import com.rsm.message.nasdaq.moldudp.MoldUDPUtil;
+import com.rsm.util.ByteUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import uk.co.real_logic.sbe.codec.java.DirectBuffer;
@@ -14,7 +17,6 @@ import java.nio.channels.MembershipKey;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.charset.Charset;
-import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.Iterator;
 
@@ -25,21 +27,25 @@ public class Sequencer2 {
 
     private static final Logger log = LogManager.getLogger(Sequencer2.class);
 
-    String COMMAND_MULTICAST_IP = "FF02:0:0:0:0:0:0:3";
-    int COMMAND_MULTICAST_PORT = 9000;
+    public static final String COMMAND_MULTICAST_IP = "FF02:0:0:0:0:0:0:3";
+    public static final int COMMAND_MULTICAST_PORT = 9000;
 
-    String EVENT_MULTICAST_IP = "FF02:0:0:0:0:0:0:4";
-    int EVENT_MULTICAST_PORT = 9001;
+    public static final String EVENT_MULTICAST_IP = "FF02:0:0:0:0:0:0:4";
+    public static final int EVENT_MULTICAST_PORT = 9001;
 
-    DatagramChannel server = null;
-    MembershipKey key = null;
+    private final int logModCount = 10000;
+
+    DatagramChannel commandChannel = null;
+    MembershipKey commandMembershipKey = null;
+
+    DatagramChannel eventChannel = null;
 
     ByteBuffer commandByteBuffer;
     DirectBuffer commandDirectBuffer;
     int commandPosition = 0;
 
 
-    private final MoldUDP64Packet moldUDP64Packet = new MoldUDP64Packet();
+    private final MoldUDP64Packet commandMoldUDP64Packet = new MoldUDP64Packet();
     private final StreamHeader commandStreamHeader = new StreamHeader();
     private final int streamHeaderVersion = 1;
     private final byte[] sessionBytes = new byte[DownstreamPacketHeader.sessionLength()];
@@ -51,15 +57,23 @@ public class Sequencer2 {
     ByteBuffer eventByteBuffer;
     DirectBuffer eventDirectBuffer;
     int eventPosition = 0;
-    long eventSequence = 0;
+//    long eventSequence = 0;
+
+    private SequenceUtility sequenceUtility;
+    private int eventSequenceIndex;
+    private int sourceSequenceIndex;
 
     public Sequencer2() throws Exception {
-        commandByteBuffer = ByteBuffer.allocateDirect(2048);
+        sequenceUtility = new SequenceUtility(2);
+        eventSequenceIndex = sequenceUtility.register();
+        sourceSequenceIndex = sequenceUtility.register();
+
+        commandByteBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE*2);
         commandByteBuffer.order(ByteOrder.BIG_ENDIAN);
         commandDirectBuffer = new DirectBuffer(commandByteBuffer);
         commandPosition = 0;
 
-        eventByteBuffer = ByteBuffer.allocateDirect(2048);
+        eventByteBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE*2);
         eventByteBuffer.order(ByteOrder.BIG_ENDIAN);
         eventDirectBuffer = new DirectBuffer(eventByteBuffer);
         eventPosition = 0;
@@ -67,51 +81,67 @@ public class Sequencer2 {
         NetworkInterface networkInterface = getNetworkInterface();
 
         //Create, configure and bind the datagram channel
-        server = DatagramChannel.open(StandardProtocolFamily.INET6);
-        server.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+        commandChannel = DatagramChannel.open(StandardProtocolFamily.INET6);
+        commandChannel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
         InetSocketAddress inetSocketAddress = new InetSocketAddress(COMMAND_MULTICAST_PORT);
-        server.bind(inetSocketAddress);
-        server.setOption(StandardSocketOptions.IP_MULTICAST_IF, networkInterface);
+        commandChannel.bind(inetSocketAddress);
+        commandChannel.setOption(StandardSocketOptions.IP_MULTICAST_IF, networkInterface);
 
         // join the multicast group on the network interface
-        InetAddress group = InetAddress.getByName(COMMAND_MULTICAST_IP);
-        key = server.join(group, networkInterface);
+        InetAddress commandGroup = InetAddress.getByName(COMMAND_MULTICAST_IP);
+        commandMembershipKey = commandChannel.join(commandGroup, networkInterface);
+
+        InetSocketAddress eventGroup = new InetSocketAddress(EVENT_MULTICAST_IP, EVENT_MULTICAST_PORT);
+        eventChannel = DatagramChannel.open(StandardProtocolFamily.INET6);
+        eventChannel.bind(null);
+        eventChannel.setOption(StandardSocketOptions.IP_MULTICAST_IF, networkInterface);
+        eventChannel.setOption(StandardSocketOptions.SO_SNDBUF, eventByteBuffer.capacity()*2);
+        eventChannel.configureBlocking(false);
 
         //register socket with selector
         // register socket with Selector
-        Selector sel = Selector.open();
-        server.configureBlocking(false);
-        server.register(sel, SelectionKey.OP_READ);
+        Selector selector = Selector.open();
+        commandChannel.configureBlocking(false);
+        commandChannel.register(selector, SelectionKey.OP_READ);
         boolean active = true;
+        StringBuilder sb = new StringBuilder(1024);
         while(active) {
-            int updated = sel.selectNow();
+            int updated = selector.selectNow();
             if (updated > 0) {
-                Iterator<SelectionKey> iter = sel.selectedKeys().iterator();
+                Iterator<SelectionKey> iter = selector.selectedKeys().iterator();
                 while (iter.hasNext()) {
-                    SelectionKey sk = iter.next();
+                    SelectionKey selectionKey = iter.next();
                     iter.remove();
 
-                    if(sk.isReadable()) {
-                        DatagramChannel ch = (DatagramChannel)sk.channel();
-                        SocketAddress sa = ch.receive(commandByteBuffer);
-                        if (sa != null) {
+                    if(selectionKey.isReadable()) {
+                        DatagramChannel ch = (DatagramChannel)selectionKey.channel();
+                        SocketAddress readableSocketAddress = ch.receive(commandByteBuffer);
+                        if (readableSocketAddress != null) {
                             commandByteBuffer.flip();
 
-                            eventSequence++;
-                            
                             //read MoldUDP64 Packet
                             int commandPosition = commandByteBuffer.position();
                             int startingCommandPosition = commandPosition;
-                            moldUDP64Packet.wrapForDecode(commandDirectBuffer, commandPosition, MoldUDP64Packet.BLOCK_LENGTH, MoldUDP64Packet.SCHEMA_VERSION);
-                            Arrays.fill(sessionBytes, (byte) ' ');
-                            moldUDP64Packet.downstreamPacketHeader().getSession(sessionBytes, 0);
-                            long sourceSequence = moldUDP64Packet.downstreamPacketHeader().sourceSequence();
-                            int messageCount = moldUDP64Packet.downstreamPacketHeader().messageCount();
-                            int moldUDP64PacketLength = moldUDP64Packet.size();
+                            commandMoldUDP64Packet.wrapForDecode(commandDirectBuffer, commandPosition, MoldUDP64Packet.BLOCK_LENGTH, MoldUDP64Packet.SCHEMA_VERSION);
+                            ByteUtils.fillWithSpaces(sessionBytes);
+                            commandMoldUDP64Packet.downstreamPacketHeader().getSession(sessionBytes, 0);
+                            long sourceSequence = commandMoldUDP64Packet.downstreamPacketHeader().sourceSequence();
+                            if(!sequenceUtility.equals(sourceSequenceIndex, sourceSequence)) {
+                                //there is a major bug if this ever happens
+                                sb.setLength(0);
+                                sb.append("[expectedSourceSequence").append(sequenceUtility.getSequence(sourceSequenceIndex)).append("]")
+                                  .append("[sourceSequence").append(sourceSequence).append("]")
+                                ;
+                                log.error(sb.toString());
+                            }
+                            int messageCount = commandMoldUDP64Packet.downstreamPacketHeader().messageCount();
+                            sequenceUtility.adjustSequence(sourceSequenceIndex, messageCount);
+                            int moldUDP64PacketLength = commandMoldUDP64Packet.size();
                             commandPosition += moldUDP64PacketLength;
                             commandByteBuffer.position(commandPosition);
 
-                            eventMoldUDP64Packet.wrapForDecode(eventDirectBuffer, eventPosition, EventMoldUDP64Packet.BLOCK_LENGTH, EventMoldUDP64Packet.SCHEMA_VERSION);
+                            long eventSequence = sequenceUtility.getSequence(eventSequenceIndex);
+                            eventMoldUDP64Packet.wrapForEncode(eventDirectBuffer, eventPosition);//, EventMoldUDP64Packet.BLOCK_LENGTH, EventMoldUDP64Packet.SCHEMA_VERSION);
                             eventMoldUDP64Packet.eventSequence(eventSequence);
                             eventMoldUDP64Packet.downstreamPacketHeader().putSession(sessionBytes, 0);
                             eventMoldUDP64Packet.downstreamPacketHeader().sourceSequence(sourceSequence);
@@ -157,31 +187,62 @@ public class Sequencer2 {
                             byte messageType = commandDirectBuffer.getByte(commandPosition);
                             ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
                             commandPosition += payloadSize;
-                            eventPosition += payloadSize;
                             commandByteBuffer.position(commandPosition);
+                            eventPosition += payloadSize;
+                            eventByteBuffer.position(eventPosition);
 
 //                            log.info("[seq="+sourceSequence+"][commandPosition="+commandPosition+"][messageLength="+messageLength+"]");
-//                            if((sourceSequence <= 10) || (sourceSequence % 1000000 == 0)) {
-                            if((sourceSequence >= 0)) {
-                                StringBuilder sb = new StringBuilder();
-                                sb
+                            if((eventSequence <= 10) || (eventSequence % logModCount == 0)) {
+//                            if((sourceSequence >= 0)) {
+                                sb.setLength(0);
+                                sb.append("command:")
+                                        .append("[sequence=").append(eventSequence).append("]")
                                         .append("[source=").append(source).append("]")
                                         .append("[sourceSequence=").append(sourceSequence).append("]")
                                         .append("[moldUDP64PacketLength=").append(moldUDP64PacketLength).append("]")
-                                        .append("[streamHeaderSize=").append(streamHeaderSize).append("]")
                                         .append("[messageLength=").append(messageLength).append("]")
-                                        .append("[bytesRead=").append(bytesRead).append("]")
+                                        .append("[streamHeaderSize=").append(streamHeaderSize).append("]")
+                                        .append("[payloadSize=").append(payloadSize).append("]")
                                         .append("[itchMessageType=").append(itchMessageType).append("]")
                                 ;
                                 log.info(sb.toString());
                             }
-                            commandByteBuffer.compact();
+                            if(!commandByteBuffer.hasRemaining()) {
+//                                selectionKey.cancel();
+                                commandChannel.register(selector, 0);
+                                commandByteBuffer.clear();
+                                commandPosition = commandByteBuffer.position();
+                                eventChannel.register(selector, SelectionKey.OP_WRITE);
+                            }
+//                            else {
+//                                commandByteBuffer.compact();
+//                            }
                         }
                     }
-                    else if(sk.isWritable()) {
+                    else if(selectionKey.isWritable()) {
                         int eventLimit = eventPosition;
+                        eventPosition = eventByteBuffer.position();
                         eventByteBuffer.flip();
+                        int eventBytesSent = eventChannel.send(eventByteBuffer, eventGroup);
+                        //                            eventSequence++;
+                        sequenceUtility.incrementSequence(eventSequenceIndex);
 
+                        long eventSequence = sequenceUtility.getSequence(eventSequenceIndex);
+                        if((eventSequence <= 10) || (eventSequence % logModCount == 0)) {
+                            sb.setLength(0);
+                            sb.append("event:")
+                                    .append("[sequence=").append(eventSequence).append("]")
+                                    .append("[eventBytesSent=").append(eventBytesSent).append("]")
+                            ;
+                            log.info(sb.toString());
+                        }
+                        if(!eventByteBuffer.hasRemaining()){
+//                            selectionKey.cancel();
+                            eventChannel.register(selector, 0);
+                            eventByteBuffer.clear();
+                            eventPosition = eventByteBuffer.position();
+                            commandChannel.register(selector, SelectionKey.OP_READ);
+                        }
                     }
                 }
             }
