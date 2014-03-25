@@ -68,11 +68,15 @@ implements BufferFacade, Cloneable
     private FileChannel _channel;
 
     public void print(StringBuilder sb) {
-        int bufferPosition = (int)(position % _segmentSize);
+        int bufferPosition = getBufferPosition(position);
         int buffersLength = 0;
         if(_buffers != null) {
             buffersLength =  _buffers.length;
         }
+    }
+
+    public int getBufferPosition(long position) {
+        return (int)(position % _segmentSize);
     }
 
     public String toString() {
@@ -373,13 +377,133 @@ implements BufferFacade, Cloneable
         currentByteBuffer = buffer(position);
     }
 
-
     /**
      *  Stores a single byte at the specified index.
      */
     public void put(long index, byte value)
     {
         buffer(index).put(value);
+    }
+
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
+    /* Short                                                                                                                         */
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
+
+    /**
+     * Retrieves a two-byte short starting at the current position.
+     * @return
+     */
+    public short getShort() {
+        return getShort(getByteOrder());
+    }
+
+    /**
+     * Retrieves a two-byte short starting at the current position.
+     * @return
+     */
+    public short getShort(ByteOrder byteOrder) {
+        short value = 0;
+        final int remaining = currentByteBuffer.remaining();
+        if (remaining < 2) {
+            byte short0 = 0;
+            byte short1 = 0;
+            if (getByteOrder() == ByteOrder.BIG_ENDIAN) {
+                switch (remaining) {
+                    case 1:
+                        short1 = currentByteBuffer.get();
+                        position += 1;
+                        currentByteBuffer = buffer(position);
+                        short0 = currentByteBuffer.get();
+                        position += 1;
+                        break;
+                }
+            } else {      //ByteOrder.LITTLE_ENDIAN
+                switch (remaining) {
+                    case 1:
+                        short0 = currentByteBuffer.get();
+                        position += 1;
+                        currentByteBuffer = buffer(position);
+                        short1 = currentByteBuffer.get();
+                        position += 1;
+                        break;
+                }
+            }
+            currentByteBuffer = buffer(position);
+            value = ByteUtils.makeShort(short1, short0);
+        }
+        else {
+            value = currentByteBuffer.getShort();
+            if(getByteOrder() != byteOrder) {
+                value = Short.reverseBytes(value);
+            }
+            position += 2;
+            currentByteBuffer = buffer(position);
+        }
+        currentIndex = getBuffersIndex(position);
+        return value;
+    }
+
+    /**
+     * Retrieves a two-byte short starting at the specified position.
+     * @return
+     */
+    public short getShort(long index, ByteOrder byteOrder) {
+        short value = 0;
+        MappedByteBuffer buffer = buffer(index);
+        final int remaining = buffer.remaining();
+        if (remaining < 2) {
+            byte short0 = 0;
+            byte short1 = 0;
+            if (getByteOrder() == ByteOrder.BIG_ENDIAN) {
+                switch (remaining) {
+                    case 1:
+                        short1 = buffer.get();
+                        index += 1;
+                        buffer = buffer(index);
+                        short0 = buffer.get();
+                        index += 1;
+                        break;
+                }
+            } else {      //ByteOrder.LITTLE_ENDIAN
+                switch (remaining) {
+                    case 1:
+                        short0 = buffer.get();
+                        index += 1;
+                        buffer = buffer(index);
+                        short1 = buffer.get();
+                        index += 1;
+                        break;
+                }
+            }
+//            buffer = buffer(index);
+            value = ByteUtils.makeShort(short1, short0);
+        }
+        else {
+            value = buffer.getShort();
+            if(getByteOrder() != byteOrder) {
+                value = Short.reverseBytes(value);
+            }
+//            index += 2;
+//            buffer = buffer(index);
+        }
+//        currentIndex = getBuffersIndex(position);
+        return value;
+    }
+
+    /**
+     *  Retrieves a four-byte integer starting at the specified index.
+     */
+    public short getShort(long index)
+    {
+        return getShort(index, getByteOrder());
+    }
+
+    /**
+     *  Stores a four-byte integer starting at the specified index.
+     */
+    public void putShort(long index, short value)
+    {
+        buffer(index).putShort(value);
     }
 
     /**
@@ -461,7 +585,7 @@ implements BufferFacade, Cloneable
         }
         else {
             value = currentByteBuffer.getInt();
-            if(NATIVE_BYTE_ORDER != byteOrder) {
+            if(getByteOrder() != byteOrder) {
                 value = Integer.reverseBytes(value);
             }
             position += 4;
@@ -565,7 +689,7 @@ implements BufferFacade, Cloneable
     {
         int value = 0;
         MappedByteBuffer buffer = buffer(index);
-        int remaining = currentByteBuffer.remaining();
+        int remaining = buffer.remaining();
         if(remaining < 4) {
             byte int0 = 0;
             byte int1 = 0;
@@ -636,11 +760,11 @@ implements BufferFacade, Cloneable
             value = ByteUtils.makeInt(int3, int2, int1, int0);
         }
         else {
-            value = currentByteBuffer.getInt();
-            position += 4;
-            currentByteBuffer = buffer(position);
+            value = buffer.getInt();
+            index += 4;
+            buffer = buffer(index);
         }
-        currentIndex = getBuffersIndex(position);
+//        index = getBuffersIndex(index);
         return value;
     }
 
@@ -816,39 +940,7 @@ implements BufferFacade, Cloneable
     }
 
 
-    /**
-     * Get the value at a given index.
-     *
-     * @param index in bytes from which to get.
-     * @param byteOrder of the value to be read.
-     * @return the value at a given index.
-     */
-    public short getShort(final long index, final ByteOrder byteOrder)
-    {
-        short bits = getShort(index);
-        if (NATIVE_BYTE_ORDER != byteOrder)
-        {
-            bits = Short.reverseBytes(bits);
-        }
-        return bits;
-    }
 
-    /**
-     *  Retrieves a four-byte integer starting at the specified index.
-     */
-    public short getShort(long index)
-    {
-        return buffer(index).getShort();
-    }
-
-
-    /**
-     *  Stores a four-byte integer starting at the specified index.
-     */
-    public void putShort(long index, short value)
-    {
-        buffer(index).putShort(value);
-    }
 
 
     /**
@@ -968,6 +1060,32 @@ implements BufferFacade, Cloneable
 //        return destination;
 //    }
 
+    /**
+     *  Retrieves <code>len</code> bytes starting at the specified index,
+     *  storing them in an existing <code>byte[]</code> at the specified
+     *  offset. Returns the array as a convenience. Will span segments as
+     *  needed.
+     *
+     *  @throws IndexOutOfBoundsException if the request would read past
+     *          the end of file.
+     */
+    public ByteBuffer getBytes(long index, ByteBuffer destination, int len)
+    {
+        while (len > 0)
+        {
+            ByteBuffer buf = buffer(index);
+            int count = Math.min(len, buf.remaining());
+//            buf.put(destination);
+//            destination.put(buf);
+            for(int i=0; i< count; i++) {
+                destination.put(buf.get());
+            }
+            index += count;
+            len -= count;
+        }
+        return destination;
+    }
+
 
     /**
      *  Stores the contents of the passed byte array, starting at the given index.
@@ -1059,7 +1177,7 @@ implements BufferFacade, Cloneable
     }
 
     /**
-     * Wouldnt let me compile it unless i added this method
+     * Wouldn't let me compile it unless i added this method
      * @return
      */
     @Override
@@ -1074,7 +1192,7 @@ implements BufferFacade, Cloneable
     // this is exposed for a white-box test of cloning
     public MappedByteBuffer buffer(long filePosition)
     {
-        int newCurrentPosition = (int)(filePosition % _segmentSize);
+        int newCurrentPosition = getBufferPosition(filePosition);
         int bufferIndex = getBuffersIndex(filePosition);
         grow(bufferIndex);
         MappedByteBuffer buf = _buffers[bufferIndex];

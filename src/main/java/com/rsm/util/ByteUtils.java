@@ -18,6 +18,41 @@ public abstract class ByteUtils {
         return byteArray;
     }
 
+    //short
+
+    /**
+     * @see java.nio.Bits#makeShort(byte, byte)
+     * @param b1
+     * @param b0
+     * @return
+     */
+    public static short makeShort(byte b1, byte b0) {
+        return (short)((b1 << 8) | (b0 & 0xff));
+    }
+
+    /**
+     * @see java.nio.Bits#short1(short)
+     * @param x
+     * @return
+     */
+    public static byte short1(short x) { return (byte)(x >> 8); }
+
+    /**
+     * @see java.nio.Bits#short0(short)
+     * @param x
+     * @return
+     */
+    public static byte short0(short x) { return (byte)(x     ); }
+
+//    public static void putShort(long a, short x, boolean bigEndian) {
+//        if (bigEndian)
+//            putShortB(a, x);
+//        else
+//            putShortL(a, x);
+//    }
+
+    // Integer
+
     public static int makeInt(byte b3, byte b2, byte b1, byte b0) {
         return (((b3       ) << 24) |
                 ((b2 & 0xff) << 16) |

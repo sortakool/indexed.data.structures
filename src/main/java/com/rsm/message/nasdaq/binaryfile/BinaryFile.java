@@ -2,6 +2,7 @@
 package com.rsm.message.nasdaq.binaryfile;
 
 
+import com.rsm.buffer.MappedFileBuffer;
 import com.rsm.message.nasdaq.itch.v4_1.ITCHMessageType;
 import com.rsm.message.nasdaq.moldudp.MoldUDPUtil;
 import net.openhft.chronicle.ChronicleConfig;
@@ -20,16 +21,20 @@ import java.nio.MappedByteBuffer;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 
 public class BinaryFile
 {
     private static final Logger log = LogManager.getLogger(BinaryFile.class);
 
     private final String filePath;
-    private final MappedFile mappedFile;
+    private final Path path;
+    private final File file;
+    private final MappedFileBuffer mappedFile;
     private final int blockSize;
-//    private final int overlapSize;
-    private final DirectBuffer directBuffer;
+    private final long initialFileSize;
+    private final long growBySize;
+//    private final DirectBuffer directBuffer;
     private long sequence = 0;
     private long currentFilePosition = 0;
 
@@ -37,15 +42,20 @@ public class BinaryFile
     private long nextBufferPosition = 0;
 
 
-    public BinaryFile(String filePath, int blockSize) throws IOException {
+    public BinaryFile(String filePath, int blockSize, long initialFileSize, long growBySize) throws IOException {
         this.filePath = filePath;
         this.currentFilePosition = 0;
         this.blockSize = blockSize;
+        this.initialFileSize = initialFileSize;
+        this.growBySize = growBySize;
         this.nextBufferPosition += this.blockSize;
-        this.mappedFile = new MappedFile(filePath, blockSize);
-        MappedMemory mappedMemory = this.mappedFile.acquire(currentFilePosition);
-        MappedByteBuffer buffer = mappedMemory.buffer();
-        this.directBuffer = new DirectBuffer(buffer);
+
+
+        path = Paths.get(filePath);
+        file = path.toFile();
+        mappedFile = new MappedFileBuffer(file, blockSize, initialFileSize, growBySize, true, false);
+//        final MappedByteBuffer buffer = this.mappedFile.buffer(currentFilePosition);
+//        this.directBuffer = new DirectBuffer(buffer);
 
         this.nextMessageLength = getNextMessageLength();
     }
@@ -68,38 +78,29 @@ public class BinaryFile
     }
 
     public void next(ByteBuffer destination) throws IOException {
-        final int remaining = destination.remaining();
-        if(remaining < nextMessageLength) {
-            throw new RuntimeException("Not enough room for nextMessageLength of " + nextMessageLength + " and ByteBuffer remaining is only " + remaining);
-        }
-        int directBufferIndex = getDirectBufferIndex(currentFilePosition);
-        final int bytesLength = this.directBuffer.getBytes(directBufferIndex, destination, nextMessageLength);
-        assert(bytesLength == nextMessageLength);
+        this.mappedFile.getBytes(currentFilePosition, destination, nextMessageLength);
         this.sequence++;
         this.currentFilePosition += nextMessageLength;
-        checkDirectBuffer();
         this.nextMessageLength = getNextMessageLength();
 
     }
 
-    private void checkDirectBuffer() throws IOException {
-        if(this.currentFilePosition >= nextBufferPosition) {
-            MappedMemory mappedMemory = this.mappedFile.acquire(currentFilePosition);
-            MappedByteBuffer buffer = mappedMemory.buffer();
-            this.directBuffer.wrap(buffer);
-            nextBufferPosition += blockSize;
-        }
-    }
+//    private void checkDirectBuffer(long size) throws IOException {
+//        final long deltaFilePosition = this.currentFilePosition + size;
+//        if(deltaFilePosition >= nextBufferPosition) {
+//            MappedByteBuffer buffer = this.mappedFile.buffer(nextBufferPosition);
+//            this.directBuffer.wrap(buffer);
+//            nextBufferPosition += blockSize;
+//        }
+//    }
 
     public long getSequence() {
         return sequence;
     }
 
     public short getNextMessageLength() throws IOException {
-        int directBufferIndex = getDirectBufferIndex(currentFilePosition);
-        final short messageLength = this.directBuffer.getShort(directBufferIndex, ByteOrder.BIG_ENDIAN);
+        final short messageLength = this.mappedFile.getShort(currentFilePosition, ByteOrder.BIG_ENDIAN);
         this.currentFilePosition += BitUtil.SIZE_OF_SHORT;
-        checkDirectBuffer();
         return messageLength;
     }
 
@@ -112,12 +113,14 @@ public class BinaryFile
         FileSystem fileSystem = FileSystems.getDefault();
         Path path = fileSystem.getPath(System.getProperty("user.home") + "/Downloads/11092013.NASDAQ_ITCH41");
         File file = path.toFile();
+        long fileSize = file.length();
         String absolutePath = file.getAbsolutePath();
-        int dataBlockSize = ChronicleConfig.TEST.dataBlockSize();
+        int dataBlockSize = ChronicleConfig.SMALL.dataBlockSize();
 
         final ByteBuffer tempByteBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE);
 
-        BinaryFile binaryFile = new BinaryFile(absolutePath, dataBlockSize);
+        //BinaryFile(String filePath, int blockSize, long initialFileSize, long growBySize) throws IOException {
+        BinaryFile binaryFile = new BinaryFile(absolutePath, dataBlockSize, fileSize, dataBlockSize);
         long binaryFileSequence = -1;
         while(binaryFile.hasNext()) {
             tempByteBuffer.clear();
@@ -129,7 +132,7 @@ public class BinaryFile
                 throw new RuntimeException("Null ITCHMessageType for " + binaryFile);
             }
             binaryFileSequence = binaryFile.getSequence();
-            if((binaryFileSequence < 10) || (binaryFileSequence % 100 == 0)) {
+            if((binaryFileSequence < 10) || (binaryFileSequence % 1000000 == 0)) {
                 log.info("end - [sequence=" + binaryFile.getSequence() + "][itchMessageType="+itchMessageType+"]");
             }
         }

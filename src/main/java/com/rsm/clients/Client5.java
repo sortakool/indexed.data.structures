@@ -82,7 +82,7 @@ public class Client5 {
 
         path = Paths.get(System.getProperty("user.home") + "/Downloads/11092013.NASDAQ_ITCH41");
         file = path.toFile();
-        fileBuffer = new MappedFileBuffer(file);
+//        fileBuffer = new MappedFileBuffer(file);
         long fileSize = file.length();
         fileBuffer = new MappedFileBuffer(file, MappedFileBuffer.MAX_SEGMENT_SIZE, fileSize, MappedFileBuffer.MAX_SEGMENT_SIZE, true, false);
         filePosition = fileBuffer.position();
