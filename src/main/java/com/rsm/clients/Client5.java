@@ -2,9 +2,11 @@ package com.rsm.clients;
 
 import com.rsm.buffer.MappedFileBuffer;
 import com.rsm.message.nasdaq.SequenceUtility;
+import com.rsm.message.nasdaq.binaryfile.BinaryFile;
 import com.rsm.message.nasdaq.itch.v4_1.*;
 import com.rsm.message.nasdaq.moldudp.MoldUDPUtil;
 import com.rsm.util.ByteUtils;
+import net.openhft.chronicle.ChronicleConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import uk.co.real_logic.sbe.codec.java.DirectBuffer;
@@ -39,7 +41,7 @@ public class Client5 {
     public static final String EVENT_MULTICAST_IP = "FF02:0:0:0:0:0:0:4";
     public static final int EVENT_MULTICAST_PORT = 9001;
 
-    private final int logModCount = 10000;
+    private final int logModCount = 1_000_000;
 
     private final MoldUDP64Packet commandMoldUDP64Packet = new MoldUDP64Packet();
     private final StreamHeader commandStreamHeader = new StreamHeader();
@@ -51,10 +53,7 @@ public class Client5 {
 
     Path path;
     File file;
-    MappedFileBuffer fileBuffer;
-    MappedByteBuffer fileByteBuffer;
-    DirectBuffer fileDirectBuffer;
-    long filePosition = 0;
+    BinaryFile binaryFile;
 
 //    private int sourceSequence = 0;
 
@@ -82,13 +81,11 @@ public class Client5 {
 
         path = Paths.get(System.getProperty("user.home") + "/Downloads/11092013.NASDAQ_ITCH41");
         file = path.toFile();
-//        fileBuffer = new MappedFileBuffer(file);
+        String absolutePath = file.getAbsolutePath();
         long fileSize = file.length();
-        fileBuffer = new MappedFileBuffer(file, MappedFileBuffer.MAX_SEGMENT_SIZE, fileSize, MappedFileBuffer.MAX_SEGMENT_SIZE, true, false);
-        filePosition = fileBuffer.position();
-        long capacity = fileBuffer.capacity();
-        fileByteBuffer = fileBuffer.buffer(filePosition);
-        fileDirectBuffer = new DirectBuffer(fileByteBuffer);
+        int dataBlockSize = ChronicleConfig.SMALL.dataBlockSize();
+        binaryFile = new BinaryFile(absolutePath, dataBlockSize, fileSize, dataBlockSize, ByteOrder.BIG_ENDIAN);
+
 
         String fileName = file.getName();
         String[] fileNameParts = fileName.split("\\.");
@@ -142,13 +139,9 @@ public class Client5 {
             SelectionKey commandSelectionKey = commandChannel.register(selector, SelectionKey.OP_WRITE);
             SelectionKey eventSelectionKey = eventChannel.register(selector, SelectionKey.OP_READ);
 
-            String msg = "hello";
-//            ByteBuffer buffer = ByteBuffer.wrap(msg.getBytes());
-//            ByteBuffer commandByteBuffer = ByteBuffer.allocateDirect(msg.length());
-
             boolean active = true;
             StringBuilder sb = new StringBuilder(1024);
-            while(active) {
+            while(active  && binaryFile.hasNext()) {
                 int selected = selector.selectNow();
                 if(selected <= 0) {
                     continue;
@@ -248,31 +241,24 @@ public class Client5 {
 
                             if(!eventByteBuffer.hasRemaining()) {
 //                                selectionKey.cancel();
-                                eventChannel.register(selector, 0);
+//                                eventChannel.register(selector, 0);
+                                eventSelectionKey.interestOps(0);
 
                                 eventByteBuffer.clear();
                                 eventPosition = eventByteBuffer.position();
-                                commandChannel.register(selector, SelectionKey.OP_WRITE);
+//                                commandChannel.register(selector, SelectionKey.OP_WRITE);
+                                commandSelectionKey.interestOps(SelectionKey.OP_WRITE);
                             }
                         }
                     }
                     else if (selectionKey.isWritable()) {
                         commandByteBuffer.clear();
                         commandPosition = commandByteBuffer.position();
-                        fileByteBuffer.position((int)filePosition);
-                        fileByteBuffer.limit(fileByteBuffer.capacity());
-                        short messageLength = fileDirectBuffer.getShort((int) filePosition, ByteOrder.BIG_ENDIAN);
+                        short messageLength = binaryFile.getCurrentMessageLength();
                         if(messageLength == 0) {
                             active = false;
                             break;
                         }
-                        filePosition += 2;
-                        fileByteBuffer.position((int)filePosition);
-                        long nextFilePosition = filePosition + messageLength;
-                        if(nextFilePosition > Integer.MAX_VALUE) {
-                            throw new IllegalArgumentException("Invalid position " + nextFilePosition);
-                        }
-                        fileByteBuffer.limit((int) nextFilePosition);
 
                         //write MoldUDP64 Packet
                         long startingCommandPosition = commandPosition;
@@ -308,17 +294,12 @@ public class Client5 {
                         commandByteBuffer.position((int)commandPosition);
 
                         //payload
-                        int bytesRead = fileDirectBuffer.getBytes((int) filePosition, commandByteBuffer, messageLength);
-//                        int bytesRead = fileDirectBuffer.putBytes((int)filePosition, commandByteBuffer, messageLength);
+                        int bytesRead = binaryFile.next(commandByteBuffer);
                         assert (bytesRead == messageLength);
-                        byte fileMessageType = fileDirectBuffer.getByte((int)filePosition);
                         byte messageType = commandDirectBuffer.getByte((int)commandPosition);
                         ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
 
                         commandPosition += bytesRead;
-//                        commandByteBuffer.position((int)startingCommandPosition);
-//                        int nextCommandLimit = moldUDP64PacketLength + 2 + messageLength;
-//                        commandByteBuffer.limit(nextCommandLimit);
                         commandByteBuffer.position((int)commandPosition);
                         commandByteBuffer.flip();
 
@@ -330,7 +311,6 @@ public class Client5 {
                                .append("[session=").append(sessionString).append("]")
                                .append("[sourceSequence=").append(sequenceUtility.getSequence(sourceSequenceIndex)).append("]")
                                .append("[source=").append(source).append("]")
-                               .append("[filePosition=").append(filePosition).append("]")
                                .append("[moldUDP64PacketLength=").append(moldUDP64PacketLength).append("]")
                                .append("[streamHeaderSize=").append(streamHeaderSize).append("]")
                                .append("[messageLength=").append(totalMessageSize).append("]")
@@ -342,15 +322,15 @@ public class Client5 {
                             log.info(sb.toString());
                         }
 
-                        filePosition = nextFilePosition;
-
                         if(!commandByteBuffer.hasRemaining()) {
 //                            selectionKey.cancel();
-                            commandChannel.register(selector, 0);
+//                            commandChannel.register(selector, 0);
+                            commandSelectionKey.interestOps(0);
 
                             commandByteBuffer.clear();
                             commandPosition = commandByteBuffer.position();
-                            eventChannel.register(selector, SelectionKey.OP_READ);
+//                            eventChannel.register(selector, SelectionKey.OP_READ);
+                            eventSelectionKey.interestOps(SelectionKey.OP_READ);
                         }
                     }
                 }

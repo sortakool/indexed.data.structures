@@ -22,6 +22,7 @@ import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.TimeUnit;
 
 public class BinaryFile
 {
@@ -34,6 +35,7 @@ public class BinaryFile
     private final int blockSize;
     private final long initialFileSize;
     private final long growBySize;
+    private final ByteOrder byteOrder;
 //    private final DirectBuffer directBuffer;
     private long sequence = 0;
     private long currentFilePosition = 0;
@@ -42,21 +44,18 @@ public class BinaryFile
     private long nextBufferPosition = 0;
 
 
-    public BinaryFile(String filePath, int blockSize, long initialFileSize, long growBySize) throws IOException {
+    public BinaryFile(String filePath, int blockSize, long initialFileSize, long growBySize, ByteOrder byteOrder) throws IOException {
         this.filePath = filePath;
         this.currentFilePosition = 0;
         this.blockSize = blockSize;
         this.initialFileSize = initialFileSize;
         this.growBySize = growBySize;
+        this.byteOrder = byteOrder;
         this.nextBufferPosition += this.blockSize;
-
-
         path = Paths.get(filePath);
         file = path.toFile();
         mappedFile = new MappedFileBuffer(file, blockSize, initialFileSize, growBySize, true, false);
-//        final MappedByteBuffer buffer = this.mappedFile.buffer(currentFilePosition);
-//        this.directBuffer = new DirectBuffer(buffer);
-
+        mappedFile.setByteOrder(byteOrder);
         this.nextMessageLength = getNextMessageLength();
     }
 
@@ -77,11 +76,13 @@ public class BinaryFile
         return (nextMessageLength != 0);
     }
 
-    public void next(ByteBuffer destination) throws IOException {
-        this.mappedFile.getBytes(currentFilePosition, destination, nextMessageLength);
+    public int next(ByteBuffer destination) throws IOException {
+        int currentMessageLength = nextMessageLength;
+        this.mappedFile.getBytes(currentFilePosition, destination, currentMessageLength);
         this.sequence++;
-        this.currentFilePosition += nextMessageLength;
+        this.currentFilePosition += currentMessageLength;
         this.nextMessageLength = getNextMessageLength();
+        return currentMessageLength;
 
     }
 
@@ -98,8 +99,12 @@ public class BinaryFile
         return sequence;
     }
 
+    public short getCurrentMessageLength() {
+        return nextMessageLength;
+    }
+
     public short getNextMessageLength() throws IOException {
-        final short messageLength = this.mappedFile.getShort(currentFilePosition, ByteOrder.BIG_ENDIAN);
+        final short messageLength = this.mappedFile.getShort(currentFilePosition, byteOrder);
         this.currentFilePosition += BitUtil.SIZE_OF_SHORT;
         return messageLength;
     }
@@ -107,6 +112,11 @@ public class BinaryFile
     private int getDirectBufferIndex(long position) {
         int directBufferIndex = (int)(position % blockSize);
         return directBufferIndex;
+    }
+
+    public void reset() throws IOException {
+        currentFilePosition = 0;
+        nextMessageLength = getNextMessageLength();
     }
 
     public static void main(String[] args) throws Exception {
@@ -119,8 +129,8 @@ public class BinaryFile
 
         final ByteBuffer tempByteBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE);
 
-        //BinaryFile(String filePath, int blockSize, long initialFileSize, long growBySize) throws IOException {
-        BinaryFile binaryFile = new BinaryFile(absolutePath, dataBlockSize, fileSize, dataBlockSize);
+        final long startTime = System.nanoTime();
+        BinaryFile binaryFile = new BinaryFile(absolutePath, dataBlockSize, fileSize, dataBlockSize, ByteOrder.BIG_ENDIAN);
         long binaryFileSequence = -1;
         while(binaryFile.hasNext()) {
             tempByteBuffer.clear();
@@ -132,10 +142,12 @@ public class BinaryFile
                 throw new RuntimeException("Null ITCHMessageType for " + binaryFile);
             }
             binaryFileSequence = binaryFile.getSequence();
-            if((binaryFileSequence < 10) || (binaryFileSequence % 1000000 == 0)) {
-                log.info("end - [sequence=" + binaryFile.getSequence() + "][itchMessageType="+itchMessageType+"]");
+            if((binaryFileSequence < 10) || (binaryFileSequence % 1_000_000 == 0)) {
+                log.info("[sequence=" + binaryFile.getSequence() + "][itchMessageType="+itchMessageType+"]");
             }
         }
-        log.info("end - [sequence=" + binaryFileSequence + "]");
+        final long endTime = System.nanoTime();
+        long duration = endTime - startTime;
+        log.info("end - [sequence=" + binaryFileSequence + "][duration="+ TimeUnit.NANOSECONDS.toMillis(duration)+"ms]");
     }
 }

@@ -33,7 +33,7 @@ public class Sequencer2 {
     public static final String EVENT_MULTICAST_IP = "FF02:0:0:0:0:0:0:4";
     public static final int EVENT_MULTICAST_PORT = 9001;
 
-    private final int logModCount = 10000;
+    private final int logModCount = 1_000_000;
 
     DatagramChannel commandChannel = null;
     MembershipKey commandMembershipKey = null;
@@ -78,6 +78,8 @@ public class Sequencer2 {
         eventDirectBuffer = new DirectBuffer(eventByteBuffer);
         eventPosition = 0;
 
+        Selector selector = Selector.open();
+
         NetworkInterface networkInterface = getNetworkInterface();
 
         //Create, configure and bind the datagram channel
@@ -97,12 +99,15 @@ public class Sequencer2 {
         eventChannel.setOption(StandardSocketOptions.IP_MULTICAST_IF, networkInterface);
         eventChannel.setOption(StandardSocketOptions.SO_SNDBUF, eventByteBuffer.capacity()*2);
         eventChannel.configureBlocking(false);
+        final SelectionKey writableSelectionKey = eventChannel.register(selector, 0);
 
         //register socket with selector
         // register socket with Selector
-        Selector selector = Selector.open();
+
         commandChannel.configureBlocking(false);
-        commandChannel.register(selector, SelectionKey.OP_READ);
+
+        final SelectionKey readableSelectionKey = commandChannel.register(selector, SelectionKey.OP_READ);
+
         boolean active = true;
         StringBuilder sb = new StringBuilder(1024);
         while(active) {
@@ -178,13 +183,15 @@ public class Sequencer2 {
                             eventStreamHeader.id(id);
                             eventStreamHeader.ref(ref);
                             eventPosition += streamHeaderSize;
-//                            eventByteBuffer.position(eventPosition);
+                            eventByteBuffer.position(eventPosition);
 
                             //payload
                             int payloadSize = messageLength - streamHeaderSize;
-                            int bytesRead = commandDirectBuffer.getBytes(eventPosition, eventByteBuffer, payloadSize);
+                            int bytesRead = commandDirectBuffer.getBytes(commandPosition, eventByteBuffer, payloadSize);
                             assert (bytesRead == payloadSize);
                             byte messageType = commandDirectBuffer.getByte(commandPosition);
+                            final byte eventMessageType = eventDirectBuffer.getByte(eventPosition);
+                            assert(messageType == eventMessageType);
                             ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
                             commandPosition += payloadSize;
                             commandByteBuffer.position(commandPosition);
@@ -209,10 +216,12 @@ public class Sequencer2 {
                             }
                             if(!commandByteBuffer.hasRemaining()) {
 //                                selectionKey.cancel();
-                                commandChannel.register(selector, 0);
+//                                commandChannel.register(selector, 0);
+                                readableSelectionKey.interestOps(0);
                                 commandByteBuffer.clear();
                                 commandPosition = commandByteBuffer.position();
-                                eventChannel.register(selector, SelectionKey.OP_WRITE);
+//                                eventChannel.register(selector, SelectionKey.OP_WRITE);
+                                writableSelectionKey.interestOps(SelectionKey.OP_WRITE);
                             }
 //                            else {
 //                                commandByteBuffer.compact();
@@ -238,10 +247,12 @@ public class Sequencer2 {
                         }
                         if(!eventByteBuffer.hasRemaining()){
 //                            selectionKey.cancel();
-                            eventChannel.register(selector, 0);
+//                            eventChannel.register(selector, 0);
+                            writableSelectionKey.interestOps(0);
                             eventByteBuffer.clear();
                             eventPosition = eventByteBuffer.position();
-                            commandChannel.register(selector, SelectionKey.OP_READ);
+//                            commandChannel.register(selector, SelectionKey.OP_READ);
+                            readableSelectionKey.interestOps(SelectionKey.OP_READ);
                         }
                     }
                 }
