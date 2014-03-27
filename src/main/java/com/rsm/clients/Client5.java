@@ -41,7 +41,7 @@ public class Client5 {
     public static final String EVENT_MULTICAST_IP = "FF02:0:0:0:0:0:0:4";
     public static final int EVENT_MULTICAST_PORT = 9001;
 
-    private final int logModCount = 1_000_000;
+    private final int logModCount = 100_000;
 
     private final MoldUDP64Packet commandMoldUDP64Packet = new MoldUDP64Packet();
     private final StreamHeader commandStreamHeader = new StreamHeader();
@@ -139,6 +139,9 @@ public class Client5 {
             SelectionKey commandSelectionKey = commandChannel.register(selector, SelectionKey.OP_WRITE);
             SelectionKey eventSelectionKey = eventChannel.register(selector, SelectionKey.OP_READ);
 
+            commandSelectionKey.attach(commandByteBuffer);
+            eventSelectionKey.attach(eventByteBuffer);
+
             boolean active = true;
             StringBuilder sb = new StringBuilder(1024);
             while(active  && binaryFile.hasNext()) {
@@ -162,92 +165,94 @@ public class Client5 {
                         SocketAddress readableSocketAddress = ch.receive(eventByteBuffer);
                         if (readableSocketAddress != null) {
                             eventByteBuffer.flip();
-                            int bytesReceived = eventByteBuffer.remaining();
+                            if(eventByteBuffer.hasRemaining()) {
+                                int bytesReceived = eventByteBuffer.remaining();
 
-                            //read Event MoldUDP64 Packet
-                            int eventPosition = eventByteBuffer.position();
-                            int startingEventPosition = eventPosition;
-                            eventMoldUDP64Packet.wrapForDecode(eventDirectBuffer, eventPosition, EventMoldUDP64Packet.BLOCK_LENGTH, EventMoldUDP64Packet.SCHEMA_VERSION);
-                            eventSequence = eventMoldUDP64Packet.eventSequence();
-                            if(!sequenceUtility.equals(eventSequenceIndex, eventSequence)) {
-                                sb.setLength(0);
-                                sb.append("[expectedEventSequence=").append(sequenceUtility.getSequence(eventSequenceIndex)).append("]")
-                                  .append("[eventSequence=").append(eventSequence).append("]")
-                                ;
-                                log.info(sb.toString());
-                                //TODO get missing messages from rewind server
-                            }
-                            eventMoldUDP64Packet.downstreamPacketHeader().getSession(sessionBytes, 0);
-                            long sourceSequence = eventMoldUDP64Packet.downstreamPacketHeader().sourceSequence();
-                            if(!sequenceUtility.equals(sourceSequenceIndex, sourceSequence)) {
-                                //there is a major bug if this ever happens
-                                sb.setLength(0);
-                                sb.append("[expectedSourceSequence").append(sequenceUtility.getSequence(sourceSequenceIndex)).append("]")
-                                  .append("[sourceSequence").append(sourceSequence).append("]")
-                                ;
-                                log.error(sb.toString());
-                            }
-                            int messageCount = eventMoldUDP64Packet.downstreamPacketHeader().messageCount();
-                            eventPosition +=  eventMoldUDP64Packet.size();
+                                //read Event MoldUDP64 Packet
+                                int eventPosition = eventByteBuffer.position();
+                                int startingEventPosition = eventPosition;
+                                eventMoldUDP64Packet.wrapForDecode(eventDirectBuffer, eventPosition, EventMoldUDP64Packet.BLOCK_LENGTH, EventMoldUDP64Packet.SCHEMA_VERSION);
+                                eventSequence = eventMoldUDP64Packet.eventSequence();
+                                if(!sequenceUtility.equals(eventSequenceIndex, eventSequence)) {
+                                    sb.setLength(0);
+                                    sb.append("[expectedEventSequence=").append(sequenceUtility.getSequence(eventSequenceIndex)).append("]")
+                                            .append("[eventSequence=").append(eventSequence).append("]")
+                                    ;
+                                    log.info(sb.toString());
+                                    //TODO get missing messages from rewind server
+                                }
+                                eventMoldUDP64Packet.downstreamPacketHeader().getSession(sessionBytes, 0);
+                                long sourceSequence = eventMoldUDP64Packet.downstreamPacketHeader().sourceSequence();
+                                if(!sequenceUtility.equals(sourceSequenceIndex, sourceSequence)) {
+                                    //there is a major bug if this ever happens
+                                    sb.setLength(0);
+                                    sb.append("[expectedSourceSequence").append(sequenceUtility.getSequence(sourceSequenceIndex)).append("]")
+                                            .append("[sourceSequence").append(sourceSequence).append("]")
+                                    ;
+                                    log.error(sb.toString());
+                                }
+                                int messageCount = eventMoldUDP64Packet.downstreamPacketHeader().messageCount();
+                                eventPosition +=  eventMoldUDP64Packet.size();
 
-                            //downstream packet message block
-                            short messageLength = eventDirectBuffer.getShort(eventPosition, ByteOrder.BIG_ENDIAN);
-                            eventPosition += 2;
-                            eventByteBuffer.position(eventPosition);
+                                //downstream packet message block
+                                short messageLength = eventDirectBuffer.getShort(eventPosition, ByteOrder.BIG_ENDIAN);
+                                eventPosition += 2;
+                                eventByteBuffer.position(eventPosition);
 
-                            //streamHeader
-                            int streamHeaderPosition = eventPosition;
-                            eventStreamHeader.wrap(eventDirectBuffer, eventPosition, streamHeaderVersion);
-                            long timestampNanos = eventStreamHeader.timestampNanos();
-                            byte major = eventStreamHeader.major();
-                            byte minor = eventStreamHeader.minor();
-                            long eventSource = eventStreamHeader.source();
-                            long id = eventStreamHeader.id();
-                            long ref = eventStreamHeader.ref();
-                            int streamHeaderSize = eventStreamHeader.size();
-                            eventPosition += streamHeaderSize;
-                            eventByteBuffer.position(eventPosition);
+                                //streamHeader
+                                int streamHeaderPosition = eventPosition;
+                                eventStreamHeader.wrap(eventDirectBuffer, eventPosition, streamHeaderVersion);
+                                long timestampNanos = eventStreamHeader.timestampNanos();
+                                byte major = eventStreamHeader.major();
+                                byte minor = eventStreamHeader.minor();
+                                long eventSource = eventStreamHeader.source();
+                                long id = eventStreamHeader.id();
+                                long ref = eventStreamHeader.ref();
+                                int streamHeaderSize = eventStreamHeader.size();
+                                eventPosition += streamHeaderSize;
+                                eventByteBuffer.position(eventPosition);
 
-                            //payload
-                            int payloadSize = messageLength - streamHeaderSize;
+                                //payload
+                                int payloadSize = messageLength - streamHeaderSize;
 //                            int bytesRead = eventDirectBuffer.getBytes(eventPosition, eventByteBuffer, payloadSize);
 //                            assert (bytesRead == payloadSize);
-                            byte messageType = eventDirectBuffer.getByte(eventPosition);
-                            ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
-                            eventPosition += payloadSize;
-                            eventByteBuffer.position(eventPosition);
+                                byte messageType = eventDirectBuffer.getByte(eventPosition);
+                                ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
+                                eventPosition += payloadSize;
+                                eventByteBuffer.position(eventPosition);
 
 
-                            eventSequence = sequenceUtility.adjustSequence(eventSequenceIndex, messageCount);
-                            sourceSequence = sequenceUtility.adjustSequence(sourceSequenceIndex, messageCount);
+                                eventSequence = sequenceUtility.adjustSequence(eventSequenceIndex, messageCount);
+                                sourceSequence = sequenceUtility.adjustSequence(sourceSequenceIndex, messageCount);
 
-                            if((eventSequence <= 10) || (eventSequence % logModCount == 0)) {
+                                if((eventSequence <= 10) || (eventSequence % logModCount == 0)) {
 //                            if((sourceSequence >= 0)) {
-                                sb.setLength(0);
-                                sb.append("event:")
-                                        .append("[session=").append(sessionString).append("]")
-                                        .append("[eventSequence=").append(eventSequence).append("]")
-                                        .append("[source=").append(eventSource).append("]")
-                                        .append("[sourceSequence=").append(sourceSequence).append("]")
-                                        .append("[eventMoldUDP64PacketLength=").append(eventMoldUDP64Packet.size()).append("]")
-                                        .append("[messageLength=").append(messageLength).append("]")
-                                        .append("[streamHeaderSize=").append(streamHeaderSize).append("]")
-                                        .append("[payloadSize=").append(payloadSize).append("]")
-                                        .append("[bytesReceived=").append(bytesReceived).append("]")
-                                        .append("[itchMessageType=").append(itchMessageType).append("]")
-                                ;
-                                log.info(sb.toString());
-                            }
+                                    sb.setLength(0);
+                                    sb.append("event:")
+                                            .append("[session=").append(sessionString).append("]")
+                                            .append("[eventSequence=").append(eventSequence).append("]")
+                                            .append("[source=").append(eventSource).append("]")
+                                            .append("[sourceSequence=").append(sourceSequence).append("]")
+                                            .append("[eventMoldUDP64PacketLength=").append(eventMoldUDP64Packet.size()).append("]")
+                                            .append("[messageLength=").append(messageLength).append("]")
+                                            .append("[streamHeaderSize=").append(streamHeaderSize).append("]")
+                                            .append("[payloadSize=").append(payloadSize).append("]")
+                                            .append("[bytesReceived=").append(bytesReceived).append("]")
+                                            .append("[itchMessageType=").append(itchMessageType).append("]")
+                                    ;
+                                    log.info(sb.toString());
+                                }
 
-                            if(!eventByteBuffer.hasRemaining()) {
+                                if(!eventByteBuffer.hasRemaining()) {
 //                                selectionKey.cancel();
 //                                eventChannel.register(selector, 0);
-                                eventSelectionKey.interestOps(0);
+//                                    eventSelectionKey.interestOps(0);
 
-                                eventByteBuffer.clear();
-                                eventPosition = eventByteBuffer.position();
+                                    eventByteBuffer.clear();
+                                    eventPosition = eventByteBuffer.position();
 //                                commandChannel.register(selector, SelectionKey.OP_WRITE);
-                                commandSelectionKey.interestOps(SelectionKey.OP_WRITE);
+                                    commandSelectionKey.interestOps(SelectionKey.OP_WRITE);
+                                }
                             }
                         }
                     }

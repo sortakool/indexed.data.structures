@@ -1,8 +1,5 @@
 package com.rsm.buffer;
 
-import com.rsm.message.nasdaq.binaryfile.BinaryFile;
-import com.rsm.message.nasdaq.binaryfile.index.BinaryFileIndex;
-import com.rsm.message.nasdaq.binaryfile.index.SequencePositionMap;
 import com.rsm.message.nasdaq.itch.v4_1.*;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;

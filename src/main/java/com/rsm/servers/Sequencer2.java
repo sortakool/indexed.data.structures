@@ -33,7 +33,7 @@ public class Sequencer2 {
     public static final String EVENT_MULTICAST_IP = "FF02:0:0:0:0:0:0:4";
     public static final int EVENT_MULTICAST_PORT = 9001;
 
-    private final int logModCount = 1_000_000;
+    private final int logModCount = 100_000;
 
     DatagramChannel commandChannel = null;
     MembershipKey commandMembershipKey = null;
@@ -123,109 +123,111 @@ public class Sequencer2 {
                         SocketAddress readableSocketAddress = ch.receive(commandByteBuffer);
                         if (readableSocketAddress != null) {
                             commandByteBuffer.flip();
+                            if(commandByteBuffer.hasRemaining()) {
 
-                            //read MoldUDP64 Packet
-                            int commandPosition = commandByteBuffer.position();
-                            int startingCommandPosition = commandPosition;
-                            commandMoldUDP64Packet.wrapForDecode(commandDirectBuffer, commandPosition, MoldUDP64Packet.BLOCK_LENGTH, MoldUDP64Packet.SCHEMA_VERSION);
-                            ByteUtils.fillWithSpaces(sessionBytes);
-                            commandMoldUDP64Packet.downstreamPacketHeader().getSession(sessionBytes, 0);
-                            long sourceSequence = commandMoldUDP64Packet.downstreamPacketHeader().sourceSequence();
-                            if(!sequenceUtility.equals(sourceSequenceIndex, sourceSequence)) {
-                                //there is a major bug if this ever happens
-                                sb.setLength(0);
-                                sb.append("[expectedSourceSequence").append(sequenceUtility.getSequence(sourceSequenceIndex)).append("]")
-                                  .append("[sourceSequence").append(sourceSequence).append("]")
-                                ;
-                                log.error(sb.toString());
-                            }
-                            int messageCount = commandMoldUDP64Packet.downstreamPacketHeader().messageCount();
-                            sequenceUtility.adjustSequence(sourceSequenceIndex, messageCount);
-                            int moldUDP64PacketLength = commandMoldUDP64Packet.size();
-                            commandPosition += moldUDP64PacketLength;
-                            commandByteBuffer.position(commandPosition);
+                                //read MoldUDP64 Packet
+                                int commandPosition = commandByteBuffer.position();
+                                int startingCommandPosition = commandPosition;
+                                commandMoldUDP64Packet.wrapForDecode(commandDirectBuffer, commandPosition, MoldUDP64Packet.BLOCK_LENGTH, MoldUDP64Packet.SCHEMA_VERSION);
+                                ByteUtils.fillWithSpaces(sessionBytes);
+                                commandMoldUDP64Packet.downstreamPacketHeader().getSession(sessionBytes, 0);
+                                long sourceSequence = commandMoldUDP64Packet.downstreamPacketHeader().sourceSequence();
+                                if(!sequenceUtility.equals(sourceSequenceIndex, sourceSequence)) {
+                                    //there is a major bug if this ever happens
+                                    sb.setLength(0);
+                                    sb.append("[expectedSourceSequence").append(sequenceUtility.getSequence(sourceSequenceIndex)).append("]")
+                                            .append("[sourceSequence").append(sourceSequence).append("]")
+                                    ;
+                                    log.error(sb.toString());
+                                }
+                                int messageCount = commandMoldUDP64Packet.downstreamPacketHeader().messageCount();
+                                sequenceUtility.adjustSequence(sourceSequenceIndex, messageCount);
+                                int moldUDP64PacketLength = commandMoldUDP64Packet.size();
+                                commandPosition += moldUDP64PacketLength;
+                                commandByteBuffer.position(commandPosition);
 
-                            long eventSequence = sequenceUtility.getSequence(eventSequenceIndex);
-                            eventMoldUDP64Packet.wrapForEncode(eventDirectBuffer, eventPosition);//, EventMoldUDP64Packet.BLOCK_LENGTH, EventMoldUDP64Packet.SCHEMA_VERSION);
-                            eventMoldUDP64Packet.eventSequence(eventSequence);
-                            eventMoldUDP64Packet.downstreamPacketHeader().putSession(sessionBytes, 0);
-                            eventMoldUDP64Packet.downstreamPacketHeader().sourceSequence(sourceSequence);
-                            eventMoldUDP64Packet.downstreamPacketHeader().messageCount(1);
-                            eventPosition +=  eventMoldUDP64Packet.size();
+                                long eventSequence = sequenceUtility.getSequence(eventSequenceIndex);
+                                eventMoldUDP64Packet.wrapForEncode(eventDirectBuffer, eventPosition);//, EventMoldUDP64Packet.BLOCK_LENGTH, EventMoldUDP64Packet.SCHEMA_VERSION);
+                                eventMoldUDP64Packet.eventSequence(eventSequence);
+                                eventMoldUDP64Packet.downstreamPacketHeader().putSession(sessionBytes, 0);
+                                eventMoldUDP64Packet.downstreamPacketHeader().sourceSequence(sourceSequence);
+                                eventMoldUDP64Packet.downstreamPacketHeader().messageCount(1);
+                                eventPosition +=  eventMoldUDP64Packet.size();
 
 
-                            //downstream packet message block
-                            short messageLength = commandDirectBuffer.getShort(commandPosition, ByteOrder.BIG_ENDIAN);
-                            commandPosition += 2;
-                            commandByteBuffer.position(commandPosition);
+                                //downstream packet message block
+                                short messageLength = commandDirectBuffer.getShort(commandPosition, ByteOrder.BIG_ENDIAN);
+                                commandPosition += 2;
+                                commandByteBuffer.position(commandPosition);
 
-                            eventDirectBuffer.putShort(eventPosition, messageLength, ByteOrder.BIG_ENDIAN);
-                            eventPosition += 2;
+                                eventDirectBuffer.putShort(eventPosition, messageLength, ByteOrder.BIG_ENDIAN);
+                                eventPosition += 2;
 
-                            //streamHeader
-                            int streamHeaderPosition = commandPosition;
-                            commandStreamHeader.wrap(commandDirectBuffer, commandPosition, streamHeaderVersion);
-                            long timestampNanos = commandStreamHeader.timestampNanos();
-                            byte major = commandStreamHeader.major();
-                            byte minor = commandStreamHeader.minor();
-                            long source = commandStreamHeader.source();
-                            long id = commandStreamHeader.id();
-                            long ref = commandStreamHeader.ref();
-                            int streamHeaderSize = commandStreamHeader.size();
-                            commandPosition += streamHeaderSize;
-                            commandByteBuffer.position((int)commandPosition);
+                                //streamHeader
+                                int streamHeaderPosition = commandPosition;
+                                commandStreamHeader.wrap(commandDirectBuffer, commandPosition, streamHeaderVersion);
+                                long timestampNanos = commandStreamHeader.timestampNanos();
+                                byte major = commandStreamHeader.major();
+                                byte minor = commandStreamHeader.minor();
+                                long source = commandStreamHeader.source();
+                                long id = commandStreamHeader.id();
+                                long ref = commandStreamHeader.ref();
+                                int streamHeaderSize = commandStreamHeader.size();
+                                commandPosition += streamHeaderSize;
+                                commandByteBuffer.position((int)commandPosition);
 
-                            eventStreamHeader.wrap(eventDirectBuffer, eventPosition, streamHeaderVersion);
-                            eventStreamHeader.timestampNanos(timestampNanos);
-                            eventStreamHeader.major(major);
-                            eventStreamHeader.minor(minor);
-                            eventStreamHeader.source(source);
-                            eventStreamHeader.id(id);
-                            eventStreamHeader.ref(ref);
-                            eventPosition += streamHeaderSize;
-                            eventByteBuffer.position(eventPosition);
+                                eventStreamHeader.wrap(eventDirectBuffer, eventPosition, streamHeaderVersion);
+                                eventStreamHeader.timestampNanos(timestampNanos);
+                                eventStreamHeader.major(major);
+                                eventStreamHeader.minor(minor);
+                                eventStreamHeader.source(source);
+                                eventStreamHeader.id(id);
+                                eventStreamHeader.ref(ref);
+                                eventPosition += streamHeaderSize;
+                                eventByteBuffer.position(eventPosition);
 
-                            //payload
-                            int payloadSize = messageLength - streamHeaderSize;
-                            int bytesRead = commandDirectBuffer.getBytes(commandPosition, eventByteBuffer, payloadSize);
-                            assert (bytesRead == payloadSize);
-                            byte messageType = commandDirectBuffer.getByte(commandPosition);
-                            final byte eventMessageType = eventDirectBuffer.getByte(eventPosition);
-                            assert(messageType == eventMessageType);
-                            ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
-                            commandPosition += payloadSize;
-                            commandByteBuffer.position(commandPosition);
-                            eventPosition += payloadSize;
-                            eventByteBuffer.position(eventPosition);
+                                //payload
+                                int payloadSize = messageLength - streamHeaderSize;
+                                int bytesRead = commandDirectBuffer.getBytes(commandPosition, eventByteBuffer, payloadSize);
+                                assert (bytesRead == payloadSize);
+                                byte messageType = commandDirectBuffer.getByte(commandPosition);
+                                final byte eventMessageType = eventDirectBuffer.getByte(eventPosition);
+                                assert(messageType == eventMessageType);
+                                ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
+                                commandPosition += payloadSize;
+                                commandByteBuffer.position(commandPosition);
+                                eventPosition += payloadSize;
+                                eventByteBuffer.position(eventPosition);
 
 //                            log.info("[seq="+sourceSequence+"][commandPosition="+commandPosition+"][messageLength="+messageLength+"]");
-                            if((eventSequence <= 10) || (eventSequence % logModCount == 0)) {
+                                if((eventSequence <= 10) || (eventSequence % logModCount == 0)) {
 //                            if((sourceSequence >= 0)) {
-                                sb.setLength(0);
-                                sb.append("command:")
-                                        .append("[sequence=").append(eventSequence).append("]")
-                                        .append("[source=").append(source).append("]")
-                                        .append("[sourceSequence=").append(sourceSequence).append("]")
-                                        .append("[moldUDP64PacketLength=").append(moldUDP64PacketLength).append("]")
-                                        .append("[messageLength=").append(messageLength).append("]")
-                                        .append("[streamHeaderSize=").append(streamHeaderSize).append("]")
-                                        .append("[payloadSize=").append(payloadSize).append("]")
-                                        .append("[itchMessageType=").append(itchMessageType).append("]")
-                                ;
-                                log.info(sb.toString());
-                            }
-                            if(!commandByteBuffer.hasRemaining()) {
+                                    sb.setLength(0);
+                                    sb.append("command:")
+                                            .append("[sequence=").append(eventSequence).append("]")
+                                            .append("[source=").append(source).append("]")
+                                            .append("[sourceSequence=").append(sourceSequence).append("]")
+                                            .append("[moldUDP64PacketLength=").append(moldUDP64PacketLength).append("]")
+                                            .append("[messageLength=").append(messageLength).append("]")
+                                            .append("[streamHeaderSize=").append(streamHeaderSize).append("]")
+                                            .append("[payloadSize=").append(payloadSize).append("]")
+                                            .append("[itchMessageType=").append(itchMessageType).append("]")
+                                    ;
+                                    log.info(sb.toString());
+                                }
+                                if(!commandByteBuffer.hasRemaining()) {
 //                                selectionKey.cancel();
 //                                commandChannel.register(selector, 0);
-                                readableSelectionKey.interestOps(0);
-                                commandByteBuffer.clear();
-                                commandPosition = commandByteBuffer.position();
+//                                    readableSelectionKey.interestOps(0);
+                                    commandByteBuffer.clear();
+                                    commandPosition = commandByteBuffer.position();
 //                                eventChannel.register(selector, SelectionKey.OP_WRITE);
-                                writableSelectionKey.interestOps(SelectionKey.OP_WRITE);
-                            }
+                                    writableSelectionKey.interestOps(SelectionKey.OP_WRITE);
+                                }
 //                            else {
 //                                commandByteBuffer.compact();
 //                            }
+                            }
                         }
                     }
                     else if(selectionKey.isWritable()) {

@@ -31,7 +31,7 @@ public class BinaryFile
     private final String filePath;
     private final Path path;
     private final File file;
-    private final MappedFileBuffer mappedFile;
+    final MappedFileBuffer mappedFile;
     private final int blockSize;
     private final long initialFileSize;
     private final long growBySize;
@@ -54,7 +54,7 @@ public class BinaryFile
         this.nextBufferPosition += this.blockSize;
         path = Paths.get(filePath);
         file = path.toFile();
-        mappedFile = new MappedFileBuffer(file, blockSize, initialFileSize, growBySize, true, false);
+        mappedFile = new MappedFileBuffer(file, this.blockSize, this.initialFileSize, this.growBySize, true, false);
         mappedFile.setByteOrder(byteOrder);
         this.nextMessageLength = getNextMessageLength();
     }
@@ -117,6 +117,10 @@ public class BinaryFile
     public void reset() throws IOException {
         currentFilePosition = 0;
         nextMessageLength = getNextMessageLength();
+    }
+
+    public long length() {
+        return mappedFile.capacity();
     }
 
     public static void main(String[] args) throws Exception {
