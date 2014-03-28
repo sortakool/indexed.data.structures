@@ -136,11 +136,11 @@ public class Client5 {
             eventMembershipKey = eventChannel.join(eventGroup, networkInterface);
 
             Selector selector = Selector.open();
-            SelectionKey commandSelectionKey = commandChannel.register(selector, SelectionKey.OP_WRITE);
-            SelectionKey eventSelectionKey = eventChannel.register(selector, SelectionKey.OP_READ);
+            SelectionKey commandSelectionKey = commandChannel.register(selector, SelectionKey.OP_WRITE, commandByteBuffer);
+            SelectionKey eventSelectionKey = eventChannel.register(selector, SelectionKey.OP_READ, eventByteBuffer);
 
-            commandSelectionKey.attach(commandByteBuffer);
-            eventSelectionKey.attach(eventByteBuffer);
+//            commandSelectionKey.attach(commandByteBuffer);
+//            eventSelectionKey.attach(eventByteBuffer);
 
             boolean active = true;
             StringBuilder sb = new StringBuilder(1024);

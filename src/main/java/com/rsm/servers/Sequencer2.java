@@ -99,14 +99,14 @@ public class Sequencer2 {
         eventChannel.setOption(StandardSocketOptions.IP_MULTICAST_IF, networkInterface);
         eventChannel.setOption(StandardSocketOptions.SO_SNDBUF, eventByteBuffer.capacity()*2);
         eventChannel.configureBlocking(false);
-        final SelectionKey writableSelectionKey = eventChannel.register(selector, 0);
+        final SelectionKey writableSelectionKey = eventChannel.register(selector, 0, eventByteBuffer);
 
         //register socket with selector
         // register socket with Selector
 
         commandChannel.configureBlocking(false);
 
-        final SelectionKey readableSelectionKey = commandChannel.register(selector, SelectionKey.OP_READ);
+        final SelectionKey readableSelectionKey = commandChannel.register(selector, SelectionKey.OP_READ, commandByteBuffer);
 
         boolean active = true;
         StringBuilder sb = new StringBuilder(1024);
@@ -254,7 +254,7 @@ public class Sequencer2 {
                             eventByteBuffer.clear();
                             eventPosition = eventByteBuffer.position();
 //                            commandChannel.register(selector, SelectionKey.OP_READ);
-                            readableSelectionKey.interestOps(SelectionKey.OP_READ);
+//                            readableSelectionKey.interestOps(SelectionKey.OP_READ);
                         }
                     }
                 }

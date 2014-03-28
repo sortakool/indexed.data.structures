@@ -36,7 +36,6 @@ public class BinaryFile
     private final long initialFileSize;
     private final long growBySize;
     private final ByteOrder byteOrder;
-//    private final DirectBuffer directBuffer;
     private long sequence = 0;
     private long currentFilePosition = 0;
 

@@ -3,6 +3,7 @@ package com.rsm.message.nasdaq.binaryfile;
 import com.rsm.buffer.MappedFileBuffer;
 import com.rsm.message.nasdaq.itch.v4_1.ITCHMessageType;
 import com.rsm.message.nasdaq.moldudp.MoldUDPUtil;
+import com.rsm.util.ByteUtils;
 import net.openhft.chronicle.ChronicleConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -102,7 +103,11 @@ public class IndexedBinaryFile {
     private void initialize() {
         //setup 1st record for index 1
         indexMappedFile.putLong(1L, byteOrder);
+        assert(indexMappedFile.position() == BitUtil.SIZE_OF_LONG);
+        assert( indexMappedFile.getLong(0, byteOrder) == (1L));
         indexMappedFile.putLong(0L, byteOrder);
+        assert(indexMappedFile.position() == (2*BitUtil.SIZE_OF_LONG));
+        assert( indexMappedFile.getLong(8, byteOrder) == (0L));
     }
 
     public long getSequence() {
@@ -115,26 +120,28 @@ public class IndexedBinaryFile {
         sequence++;
 
         //indexFile
-//        long sequencePositionInIndexFile = sequence*INDEX_FILE_ROW_LENGTH;
-//        long payloadPositionInIndexFile = sequencePositionInIndexFile + BitUtil.SIZE_OF_LONG;
-//        long previousPayloadPosition = getPayloadPosition(sequence);
         final long indexedMappedFilePosition = indexMappedFile.position();
         indexMappedFile.putLong(sequence+1, byteOrder);
-        assert( indexMappedFile.getLong(indexedMappedFilePosition) == (sequence+1));
-        indexMappedFile.force();
+//        indexMappedFile.force();
+        assert( indexMappedFile.getLong(indexedMappedFilePosition, byteOrder) == (sequence+1));
         final long dataMappedFilePosition = dataMappedFile.position();
-        long payloadPosition = dataMappedFilePosition + payload.remaining() + BitUtil.SIZE_OF_SHORT;
+        final int payloadLength = payload.remaining();
+        long payloadPosition = dataMappedFilePosition + payloadLength + BitUtil.SIZE_OF_SHORT;
         indexMappedFile.putLong(payloadPosition, byteOrder);
-        indexMappedFile.force();
+//        indexMappedFile.force();
+        assert( indexMappedFile.getLong(indexedMappedFilePosition + BitUtil.SIZE_OF_LONG, byteOrder) == payloadPosition);
 
         //dataFile
-        dataMappedFile.putShort((short)payload.remaining(), byteOrder);
-        dataMappedFile.force();
+        dataMappedFile.putShort((short) payloadLength, byteOrder);
+//        dataMappedFile.force();
+        assert(dataMappedFile.position() == (dataMappedFilePosition+BitUtil.SIZE_OF_SHORT) );
+        assert( dataMappedFile.getShort(dataMappedFilePosition, byteOrder) == payloadLength);
         dataMappedFile.putBytes(payload);
-        dataMappedFile.force();
+//        dataMappedFile.force();
+        assert(dataMappedFile.position() == (dataMappedFilePosition+BitUtil.SIZE_OF_SHORT+payloadLength) );
 
-        indexMappedFile.force();
-        dataMappedFile.force();
+//        indexMappedFile.force();
+//        dataMappedFile.force();
 
         return sequence;
     }
@@ -144,7 +151,9 @@ public class IndexedBinaryFile {
             return 0;
         }
         else if(theSequence > 1) {
-            return ((theSequence-1)*INDEX_FILE_ROW_LENGTH)+BitUtil.SIZE_OF_LONG;
+            final long indexFilePosition = ((theSequence - 1) * INDEX_FILE_ROW_LENGTH) + BitUtil.SIZE_OF_LONG;
+            final long payloadPosition = indexMappedFile.getLong(indexFilePosition);
+            return payloadPosition;
         }
         else {
             throw new IllegalArgumentException("Sequence number should be greater than or equal to 1 But is " + theSequence);
@@ -235,7 +244,6 @@ public class IndexedBinaryFile {
             assert (indexedBinaryFileSequence == binaryFileSequence);
             if((binaryFileSequence < 10) || (binaryFileSequence % 1_000_000 == 0)) {
                 log.info("[sequence=" + binaryFile.getSequence() + "][itchMessageType="+itchMessageType+"]");
-                indexedBinaryFile.force();
             }
 
             indexedBinaryFile.getMessage(indexedBinaryFileSequence, indexedBinaryFileByteBuffer);

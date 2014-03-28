@@ -44,6 +44,8 @@ import java.util.Arrays;
  *  <strong>Warning:</strong>
  *  This class is not thread-safe. Caller must explicitly synchronize access,
  *  or call {@link #clone} to create a distinct buffer for each thread.
+ *
+ *  @see net.sf.kdgcommons.buffer.MappedFileBuffer
  */
 public class MappedFileBuffer
 implements BufferFacade, Cloneable
@@ -354,6 +356,11 @@ implements BufferFacade, Cloneable
         return currentIndex;
     }
 
+    private void processPosition() {
+        currentIndex = getBuffersIndex(position);
+        currentByteBuffer = buffer(position);
+    }
+
     /**
      *  Retrieves a single byte from the current position.
      */
@@ -362,19 +369,21 @@ implements BufferFacade, Cloneable
     {
         byte value = currentByteBuffer.get();
         position += 1;
-        currentByteBuffer = buffer(position);
+        processPosition();
         return value;
     }
 
     public byte get(long index) {
-        return buffer(index).get();
+        final byte value = buffer(index).get();
+        processPosition();
+        return value;
     }
 
     @Override
     public void put(byte value) {
         currentByteBuffer.put(value);
         position += 1;
-        currentByteBuffer = buffer(position);
+        processPosition();
     }
 
     /**
@@ -383,6 +392,7 @@ implements BufferFacade, Cloneable
     public void put(long index, byte value)
     {
         buffer(index).put(value);
+        processPosition();
     }
 
     /* ----------------------------------------------------------------------------------------------------------------------------- */
@@ -428,7 +438,6 @@ implements BufferFacade, Cloneable
                         break;
                 }
             }
-            currentByteBuffer = buffer(position);
             value = ByteUtils.makeShort(short1, short0);
         }
         else {
@@ -437,9 +446,8 @@ implements BufferFacade, Cloneable
                 value = Short.reverseBytes(value);
             }
             position += 2;
-            currentByteBuffer = buffer(position);
         }
-        currentIndex = getBuffersIndex(position);
+        processPosition();
         return value;
     }
 
@@ -484,6 +492,7 @@ implements BufferFacade, Cloneable
                 value = Short.reverseBytes(value);
             }
         }
+        processPosition();
         return value;
     }
 
@@ -530,6 +539,7 @@ implements BufferFacade, Cloneable
             }
             buffer(index).putShort(value);
         }
+        processPosition();
     }
 
     /**
@@ -577,8 +587,7 @@ implements BufferFacade, Cloneable
             currentByteBuffer.putShort(value);
             position += 2;
         }
-        currentIndex = getBuffersIndex(position);
-        currentByteBuffer = buffer(position);
+        processPosition();
     }
 
     /* ----------------------------------------------------------------------------------------------------------------------------- */
@@ -677,8 +686,7 @@ implements BufferFacade, Cloneable
             }
             position += 4;
         }
-        currentIndex = getBuffersIndex(position);
-        currentByteBuffer = buffer(position);
+        processPosition();
         return value;
     }
 
@@ -768,10 +776,8 @@ implements BufferFacade, Cloneable
             if(getByteOrder() != byteOrder) {
                 value = Integer.reverseBytes(value);
             }
-//            index += 4;
-            buffer = buffer(index);
         }
-//        index = getBuffersIndex(index);
+        processPosition();
         return value;
     }
 
@@ -853,8 +859,7 @@ implements BufferFacade, Cloneable
             currentByteBuffer.putInt(value);
             position += 4;
         }
-        currentIndex = getBuffersIndex(position);
-        currentByteBuffer = buffer(position);
+        processPosition();
     }
 
     /**
@@ -941,6 +946,7 @@ implements BufferFacade, Cloneable
             }
             buffer.putInt(value);
         }
+        processPosition();
     }
 
     /* ----------------------------------------------------------------------------------------------------------------------------- */
@@ -1161,8 +1167,7 @@ implements BufferFacade, Cloneable
                 value = Long.reverseBytes(value);
             }
         }
-        currentIndex = getBuffersIndex(position);
-        currentByteBuffer = buffer(position);
+        processPosition();
         return value;
     }
 
@@ -1385,6 +1390,7 @@ implements BufferFacade, Cloneable
                 value = Long.reverseBytes(value);
             }
         }
+        processPosition();
         return value;
     }
 
@@ -1597,8 +1603,7 @@ implements BufferFacade, Cloneable
             currentByteBuffer.putLong(value);
             position += 8;
         }
-        currentIndex = getBuffersIndex(position);
-        currentByteBuffer = buffer(position);
+        processPosition();
     }
 
 
@@ -1815,6 +1820,7 @@ implements BufferFacade, Cloneable
             }
             buffer.putLong(value);
         }
+        processPosition();
     }
 
 
@@ -1915,6 +1921,7 @@ implements BufferFacade, Cloneable
             off += count;
             len -= count;
         }
+        processPosition();
         return array;
     }
 
@@ -1928,6 +1935,7 @@ implements BufferFacade, Cloneable
             off += count;
             len -= count;
         }
+        processPosition();
         return array;
     }
 
@@ -1966,6 +1974,7 @@ implements BufferFacade, Cloneable
             currentByteBuffer = buffer(position);
             len -= count;
         }
+        processPosition();
         return destination;
     }
 
@@ -1997,6 +2006,7 @@ implements BufferFacade, Cloneable
             index += count;
             len -= count;
         }
+        processPosition();
         return destination;
     }
 
@@ -2018,6 +2028,7 @@ implements BufferFacade, Cloneable
             currentByteBuffer = buffer(position);
             len -= count;
         }
+        processPosition();
         return source;
     }
 
@@ -2037,6 +2048,7 @@ implements BufferFacade, Cloneable
             index += count;
             len -= count;
         }
+        processPosition();
         return source;
     }
 
@@ -2073,6 +2085,7 @@ implements BufferFacade, Cloneable
             off += count;
             len -= count;
         }
+        processPosition();
     }
 
 
