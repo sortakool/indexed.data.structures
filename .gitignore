@@ -5,3 +5,5 @@
 .gradle
 .gradletasknamecache
 build
+out
+src/generated

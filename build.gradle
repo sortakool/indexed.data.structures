@@ -11,13 +11,27 @@ repositories {
     mavenCentral()
 }
 
+configurations {
+    generated
+}
+
+
+sourceSets {
+    generated {
+
+    }
+
+    main {
+        compileClasspath += sourceSets.generated.output
+    }
+}
+
 dependencies {
     compile 'net.sf.trove4j:trove4j:3.0.3'
     compile 'log4j:log4j:1.2.17'
     compile 'junit:junit:4.11'
     compile 'it.unimi.dsi:fastutil:6.5.12'
     compile 'io.netty:netty-all:5.0.0.Alpha1'
-    compile 'uk.co.real_logic:sbe:0.1-SNAPSHOT'
 
     compile 'net.sf.kdgcommons:kdgcommons:1.0.14'
 
@@ -28,11 +42,43 @@ dependencies {
     compile 'net.openhft:TransFIX:1.0.0-SNAPSHOT'
     compile 'net.openhft:affinity:2.0.1'
     compile 'net.openhft:chronicle:2.0.3'
+
+    generatedCompile 'uk.co.real_logic:sbe:0.1-SNAPSHOT'
+
+
+    //make compile depend on sbe
+
 }
 
 task runClient(type: JavaExec) {
     description = "Run the client"
     classpath sourceSets.main.runtimeClasspath
     main = "com.rsm.clients.Client"
+}
+
+task createSBEClasses(type: JavaExec) {
+    description = "generate SBE files"
+//    println "Run: java -Dsbe.output.dir=src/main/java -jar ../simple-binary-encoding/target/dist/sbe.jar src/main/resources/schemas/itch_4_1/*.xml"
+
+
+
+    classpath sourceSets.generated.runtimeClasspath
+    main = "uk.co.real_logic.sbe.SbeTool"
+//    args = "$sourceSets.generated.resources.srcDirs"
+    File res = file("src/main/resources")
+
+//    args = [res.absolutePath + "/schemas/itch_4_1/*.xml"]
+
+    FileTree tree = fileTree(dir: "src/main/resources").matching {
+        include "schemas/**"
+    }
+
+    args = tree.getFiles()
+
+//    jvmArgs = ["-Dsbe.output.dir=$sourceSets.generated.java.srcDirs"]
+    jvmArgs = ["-Dsbe.output.dir=src/generated/java"]
+
+    println commandLine
+
 }
 
