@@ -8,13 +8,16 @@ import java.util.Arrays;
  */
 public abstract class ByteUtils {
 
+    public static final byte SPACE = (byte) ' ';
+    public static final byte ZERO = (byte) 0;
+
     public static byte[] fillWithSpaces(byte[] byteArray) {
-        Arrays.fill(byteArray, (byte)' ');
+        Arrays.fill(byteArray, SPACE);
         return byteArray;
     }
 
     public static byte[] fillWithZeros(byte[] byteArray) {
-        Arrays.fill(byteArray, (byte)0);
+        Arrays.fill(byteArray, ZERO);
         return byteArray;
     }
 
