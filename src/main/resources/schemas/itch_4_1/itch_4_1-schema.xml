@@ -112,6 +112,12 @@
         </enum>
     </types>
 
+    <message name="ReplayRequest" id="5000" description="Mold replay request packet">
+        <field name="session" id="1" length="10" type="char" characterEncoding="ASCII" description="Indicates the session to which this packet belongs."/>
+        <field name="sequenceNumber" id="2" type="uint64" description="First requested sequence number."/>
+        <field name="messageCount" id="3" type="uint16" description="The count of messages contained in this packet."/>
+    </message>
+
     <message name="MoldUDP64Packet" id="3000" description="MoldUDP64 Packet">
         <field name="downstreamPacketHeader" id="3001" type="downstreamPacketHeader"/>
     </message>

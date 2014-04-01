@@ -60,8 +60,6 @@ task createSBEClasses(type: JavaExec) {
     description = "generate SBE files"
 //    println "Run: java -Dsbe.output.dir=src/main/java -jar ../simple-binary-encoding/target/dist/sbe.jar src/main/resources/schemas/itch_4_1/*.xml"
 
-
-
     classpath sourceSets.generated.runtimeClasspath
     main = "uk.co.real_logic.sbe.SbeTool"
 //    args = "$sourceSets.generated.resources.srcDirs"
@@ -69,7 +67,7 @@ task createSBEClasses(type: JavaExec) {
 
 //    args = [res.absolutePath + "/schemas/itch_4_1/*.xml"]
 
-    FileTree tree = fileTree(dir: "src/main/resources").matching {
+    tree = fileTree(dir: "src/main/resources").matching {
         include "schemas/**"
     }
 
