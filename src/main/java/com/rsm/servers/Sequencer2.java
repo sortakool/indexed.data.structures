@@ -1,14 +1,18 @@
 package com.rsm.servers;
 
 import com.rsm.message.nasdaq.SequenceUtility;
+import com.rsm.message.nasdaq.binaryfile.IndexedBinaryFile;
+import com.rsm.message.nasdaq.binaryfile.IndexedBinaryFileConfig;
 import com.rsm.message.nasdaq.itch.v4_1.*;
 import com.rsm.message.nasdaq.moldudp.MoldUDPUtil;
 import com.rsm.util.ByteUtils;
+import net.openhft.chronicle.ChronicleConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import uk.co.real_logic.sbe.codec.java.DirectBuffer;
 import uk.co.real_logic.sbe.util.BitUtil;
 
+import java.io.File;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -17,6 +21,9 @@ import java.nio.channels.MembershipKey;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.charset.Charset;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
+import java.nio.file.Path;
 import java.util.Enumeration;
 import java.util.Iterator;
 
@@ -63,7 +70,17 @@ public class Sequencer2 {
     private int eventSequenceIndex;
     private int sourceSequenceIndex;
 
-    public Sequencer2() throws Exception {
+    private final IndexedBinaryFile indexedBinaryFile;
+
+    private final byte[] commandSourceBytes = new byte[BitUtil.SIZE_OF_LONG];
+    private final byte[] eventSourceBytes = new byte[BitUtil.SIZE_OF_LONG];
+
+    public Sequencer2(SequencerConfig sequencerConfig) throws Exception {
+        ByteUtils.fillWithSpaces(commandSourceBytes);
+        ByteUtils.fillWithSpaces(eventSourceBytes);
+
+        indexedBinaryFile = new IndexedBinaryFile((sequencerConfig.getIndexedBinaryFileConfig()));
+
         sequenceUtility = new SequenceUtility(2);
         eventSequenceIndex = sequenceUtility.register();
         sourceSequenceIndex = sequenceUtility.register();
@@ -176,6 +193,9 @@ public class Sequencer2 {
                                 commandPosition += streamHeaderSize;
                                 commandByteBuffer.position((int)commandPosition);
 
+                                ByteUtils.fillWithSpaces(eventSourceBytes);
+                                ByteUtils.putLongBigEndian(eventSourceBytes, 0, source);
+
                                 eventStreamHeader.wrap(eventDirectBuffer, eventPosition, streamHeaderVersion);
                                 eventStreamHeader.timestampNanos(timestampNanos);
                                 eventStreamHeader.major(major);
@@ -199,13 +219,22 @@ public class Sequencer2 {
                                 eventPosition += payloadSize;
                                 eventByteBuffer.position(eventPosition);
 
+                                //write event
+                                eventByteBuffer.flip();
+                                final int remaining = eventByteBuffer.remaining();
+                                short len = (short)(eventMoldUDP64Packet.size() + eventStreamHeader.size() + BitUtil.SIZE_OF_SHORT + payloadSize);
+                                assert(remaining == len);
+                                indexedBinaryFile.increment(len, eventByteBuffer);
+                                indexedBinaryFile.force();
+//                                eventByteBuffer.flip();
+
 //                            log.info("[seq="+sourceSequence+"][commandPosition="+commandPosition+"][messageLength="+messageLength+"]");
                                 if((eventSequence <= 10) || (eventSequence % logModCount == 0)) {
 //                            if((sourceSequence >= 0)) {
                                     sb.setLength(0);
                                     sb.append("command:")
                                             .append("[sequence=").append(eventSequence).append("]")
-                                            .append("[source=").append(source).append("]")
+                                            .append("[source=").append(new String(eventSourceBytes)).append("]")
                                             .append("[sourceSequence=").append(sourceSequence).append("]")
                                             .append("[moldUDP64PacketLength=").append(moldUDP64PacketLength).append("]")
                                             .append("[messageLength=").append(messageLength).append("]")
@@ -274,7 +303,7 @@ public class Sequencer2 {
         Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
         while(networkInterfaces.hasMoreElements()) {
             NetworkInterface nextNetworkInterface = networkInterfaces.nextElement();
-            log.info(nextNetworkInterface);
+            log.info(nextNetworkInterface+": [supportsMulticast="+nextNetworkInterface.supportsMulticast()+"][virtual="+nextNetworkInterface.isVirtual()+"]");
             if(nextNetworkInterface.supportsMulticast()) {
                 networkInterface = nextNetworkInterface;
 //                break;
@@ -284,6 +313,33 @@ public class Sequencer2 {
     }
 
     public static void main(String[] args) throws Exception {
-        Sequencer2 sequencer = new Sequencer2();
+        SequencerConfig sequencerConfig = new SequencerConfig();
+        IndexedBinaryFileConfig indexedBinaryFileConfig = getIndexedBinaryFileConfig();
+        sequencerConfig.setIndexedBinaryFileConfig(indexedBinaryFileConfig);
+        Sequencer2 sequencer = new Sequencer2(sequencerConfig);
+    }
+
+    private static IndexedBinaryFileConfig getIndexedBinaryFileConfig() {
+        FileSystem fileSystem = FileSystems.getDefault();
+        Path directoryPath = fileSystem.getPath(System.getProperty("user.home") + "/Downloads/");
+        final String absoluteDirectoryPath = directoryPath.toFile().getAbsolutePath();
+        String baseFileName = "sequencerIndexedBinaryFile";
+
+        String indexFileSuffix = "index";
+        String dataFileSuffix = "data";
+        int dataFileBlockSize = ChronicleConfig.SMALL.dataBlockSize();
+        long dataFileInitialFileSize = ChronicleConfig.SMALL.dataBlockSize();
+        long dataFileGrowBySize = ChronicleConfig.SMALL.dataBlockSize();
+
+        int indexFileBlockSize = BitUtil.SIZE_OF_LONG*2*1_000_000; //accomodate 1,000,000 entries
+        long indexFileInitialFileSize = BitUtil.SIZE_OF_LONG*2*1_000_000; //accomodate 1,000,000,000 entries
+        long indexFileGrowBySize = BitUtil.SIZE_OF_LONG*2*1_000_000; //accomodate 1,000,000 entries
+        boolean deleteIfExists = true;
+        ByteOrder byteOrder = ByteOrder.BIG_ENDIAN;
+
+        IndexedBinaryFileConfig config = new IndexedBinaryFileConfig(absoluteDirectoryPath, baseFileName, indexFileSuffix, dataFileSuffix,
+//                Path directoryPathPath, Path dataFilePath, Path indexFilePath, File dataFile, File indexFile,
+                byteOrder, dataFileBlockSize, dataFileInitialFileSize, dataFileGrowBySize, indexFileBlockSize, indexFileInitialFileSize, indexFileGrowBySize, deleteIfExists);
+        return config;
     }
 }
