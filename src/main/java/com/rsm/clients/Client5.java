@@ -10,6 +10,7 @@ import net.openhft.chronicle.ChronicleConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import uk.co.real_logic.sbe.codec.java.DirectBuffer;
+import uk.co.real_logic.sbe.util.BitUtil;
 
 import java.io.File;
 import java.net.*;
@@ -48,8 +49,11 @@ public class Client5 {
     private final int streamHeaderVersion = 1;
     private final byte[] sessionBytes = new byte[DownstreamPacketHeader.sessionLength()];
     private final String sourceString = "client  ";
-    private final byte[] sourceBytes = sourceString.getBytes();
-    private final long source = 33434L;//TODO convert sourceBytes to long
+//    private final byte[] sourceBytes = sourceString.getBytes();
+    private final long source;
+
+    private final byte[] commandSourceBytes = new byte[BitUtil.SIZE_OF_LONG];
+    private final byte[] eventSourceBytes = new byte[BitUtil.SIZE_OF_LONG];
 
     Path path;
     File file;
@@ -75,6 +79,10 @@ public class Client5 {
     private int sourceSequenceIndex;
 
     public Client5() throws Exception {
+        source = ByteUtils.getLongBigEndian(sourceString.getBytes(), 0);
+        ByteUtils.fillWithSpaces(commandSourceBytes);
+        ByteUtils.putLongBigEndian(commandSourceBytes, 0, source);
+
         sequenceUtility = new SequenceUtility(2);
         eventSequenceIndex = sequenceUtility.register();
         sourceSequenceIndex = sequenceUtility.register();
@@ -206,6 +214,8 @@ public class Client5 {
                                 byte major = eventStreamHeader.major();
                                 byte minor = eventStreamHeader.minor();
                                 long eventSource = eventStreamHeader.source();
+                                ByteUtils.fillWithSpaces(eventSourceBytes);
+                                ByteUtils.putLongBigEndian(eventSourceBytes, 0, eventSource);
                                 long id = eventStreamHeader.id();
                                 long ref = eventStreamHeader.ref();
                                 int streamHeaderSize = eventStreamHeader.size();
@@ -231,7 +241,7 @@ public class Client5 {
                                     sb.append("event:")
                                             .append("[session=").append(sessionString).append("]")
                                             .append("[eventSequence=").append(eventSequence).append("]")
-                                            .append("[source=").append(eventSource).append("]")
+                                            .append("[source=").append(new String(eventSourceBytes)).append("]")
                                             .append("[sourceSequence=").append(sourceSequence).append("]")
                                             .append("[eventMoldUDP64PacketLength=").append(eventMoldUDP64Packet.size()).append("]")
                                             .append("[messageLength=").append(messageLength).append("]")
@@ -315,7 +325,7 @@ public class Client5 {
                                .append("command:")
                                .append("[session=").append(sessionString).append("]")
                                .append("[sourceSequence=").append(sequenceUtility.getSequence(sourceSequenceIndex)).append("]")
-                               .append("[source=").append(source).append("]")
+                               .append("[source=").append(new String(commandSourceBytes)).append("]")
                                .append("[moldUDP64PacketLength=").append(moldUDP64PacketLength).append("]")
                                .append("[streamHeaderSize=").append(streamHeaderSize).append("]")
                                .append("[messageLength=").append(totalMessageSize).append("]")

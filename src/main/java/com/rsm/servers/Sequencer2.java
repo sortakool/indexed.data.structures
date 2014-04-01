@@ -72,7 +72,13 @@ public class Sequencer2 {
 
     private final IndexedBinaryFile indexedBinaryFile;
 
+    private final byte[] commandSourceBytes = new byte[BitUtil.SIZE_OF_LONG];
+    private final byte[] eventSourceBytes = new byte[BitUtil.SIZE_OF_LONG];
+
     public Sequencer2(SequencerConfig sequencerConfig) throws Exception {
+        ByteUtils.fillWithSpaces(commandSourceBytes);
+        ByteUtils.fillWithSpaces(eventSourceBytes);
+
         indexedBinaryFile = new IndexedBinaryFile((sequencerConfig.getIndexedBinaryFileConfig()));
 
         sequenceUtility = new SequenceUtility(2);
@@ -187,6 +193,9 @@ public class Sequencer2 {
                                 commandPosition += streamHeaderSize;
                                 commandByteBuffer.position((int)commandPosition);
 
+                                ByteUtils.fillWithSpaces(eventSourceBytes);
+                                ByteUtils.putLongBigEndian(eventSourceBytes, 0, source);
+
                                 eventStreamHeader.wrap(eventDirectBuffer, eventPosition, streamHeaderVersion);
                                 eventStreamHeader.timestampNanos(timestampNanos);
                                 eventStreamHeader.major(major);
@@ -225,7 +234,7 @@ public class Sequencer2 {
                                     sb.setLength(0);
                                     sb.append("command:")
                                             .append("[sequence=").append(eventSequence).append("]")
-                                            .append("[source=").append(source).append("]")
+                                            .append("[source=").append(new String(eventSourceBytes)).append("]")
                                             .append("[sourceSequence=").append(sourceSequence).append("]")
                                             .append("[moldUDP64PacketLength=").append(moldUDP64PacketLength).append("]")
                                             .append("[messageLength=").append(messageLength).append("]")

@@ -102,6 +102,104 @@ public abstract class ByteUtils {
     /* ----------------------------------------------------------------------------------------------------------------------------- */
 
     /**
+     * @see java.nio.Bits#getLong(java.nio.ByteBuffer, int, boolean)
+     * @param bytes
+     * @param position
+     * @param bigEndian
+     * @return
+     */
+    public static long getLong(byte[] bytes, int position, boolean bigEndian) {
+        return bigEndian ? getLongBigEndian(bytes, position) : getLongLittleEndian(bytes, position);
+    }
+
+    /**
+     * @see java.nio.Bits#getLongB(java.nio.ByteBuffer, int)
+     *
+     * @param byteArray
+     * @param position
+     * @return
+     */
+    public static long getLongBigEndian(byte[] byteArray, int position) {
+        return makeLong(byteArray[position],
+                byteArray[position + 1],
+                byteArray[position + 2],
+                byteArray[position + 3],
+                byteArray[position + 4],
+                byteArray[position + 5],
+                byteArray[position + 6],
+                byteArray[position + 7]);
+    }
+
+    /**
+     * @see java.nio.Bits#getLongL(java.nio.ByteBuffer, int)
+     *
+     * @param bytes
+     * @param position
+     * @return
+     */
+    public static long getLongLittleEndian(byte[] bytes, int position) {
+        return makeLong(bytes[position + 7],
+                bytes[position + 6],
+                bytes[position + 5],
+                bytes[position + 4],
+                bytes[position + 3],
+                bytes[position + 2],
+                bytes[position + 1],
+                bytes[position + 0]);
+    }
+
+    /**
+     * @see java.nio.Bits#putLong(java.nio.ByteBuffer, int, long, boolean)
+     *
+     * @param bytes
+     * @param position
+     * @param x
+     * @param bigEndian
+     */
+    public static void putLong(byte[] bytes, int position, long x, boolean bigEndian) {
+        if (bigEndian)
+            putLongBigEndian(bytes, position, x);
+        else
+            putLongLittleEndian(bytes, position, x);
+    }
+
+    /**
+     * @see java.nio.Bits#putLongB(java.nio.ByteBuffer, int, long)
+     *
+     * @param bytes
+     * @param position
+     * @param x
+     */
+    public static void putLongBigEndian(byte[] bytes, int position, long x) {
+        bytes[position    ] = long7(x);
+        bytes[position + 1] = long6(x);
+        bytes[position + 2] = long5(x);
+        bytes[position + 3] = long4(x);
+        bytes[position + 4] = long3(x);
+        bytes[position + 5] = long2(x);
+        bytes[position + 6] = long1(x);
+        bytes[position + 7] = long0(x);
+    }
+
+    /**
+     * @see java.nio.Bits#putLongB(java.nio.ByteBuffer, int, long)
+     *
+     * @param bytes
+     * @param position
+     * @param x
+     */
+    public static void putLongLittleEndian(byte[] bytes, int position, long x) {
+        bytes[position + 7] = long7(x);
+        bytes[position + 6] = long6(x);
+        bytes[position + 5] = long5(x);
+        bytes[position + 4] = long4(x);
+        bytes[position + 3] = long3(x);
+        bytes[position + 2] = long2(x);
+        bytes[position + 1] = long1(x);
+        bytes[position    ] = long0(x);
+    }
+
+    /**
      * @see java.nio.Bits#makeLong(byte, byte, byte, byte, byte, byte, byte, byte)
      *
      * @param b7
