@@ -100,6 +100,15 @@ public class IndexedBinaryFile {
         initialize();
     }
 
+    public IndexedBinaryFile(IndexedBinaryFileConfig config) throws IOException {
+        this(config.getDirectoryPath(), config.getBaseFileName(), config.getIndexFileSuffix(), config.getDataFileSuffix(),
+                config.getDataFileBlockSize(), config.getDataFileInitialFileSize(), config.getDataFileGrowBySize(),
+                config.getIndexFileBlockSize(), config.getIndexFileInitialFileSize(), config.getIndexFileGrowBySize(),
+                config.isDeleteIfExists(),
+                config.getByteOrder())
+        ;
+    }
+
     private void initialize() {
         //setup 1st record for index 1
         indexMappedFile.putLong(1L, byteOrder);

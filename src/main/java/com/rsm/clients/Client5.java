@@ -353,7 +353,7 @@ public class Client5 {
         Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
         while(networkInterfaces.hasMoreElements()) {
             NetworkInterface nextNetworkInterface = networkInterfaces.nextElement();
-            log.info(nextNetworkInterface);
+            log.info(nextNetworkInterface+": [supportsMulticast="+nextNetworkInterface.supportsMulticast()+"][virtual="+nextNetworkInterface.isVirtual()+"]");
             if(nextNetworkInterface.supportsMulticast()) {
                 networkInterface = nextNetworkInterface;
 //                break;
