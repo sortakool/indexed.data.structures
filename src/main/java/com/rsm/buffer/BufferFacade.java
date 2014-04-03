@@ -94,6 +94,12 @@ public interface BufferFacade
 
 
     /**
+     * Retrieves a four-byte integer starting at the current position.
+     * @return
+     */
+    float getFloat();
+
+    /**
      *  Returns the 4-byte <code>float</code> value at the specified index
      *  (relative to the relocation base).
      */

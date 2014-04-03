@@ -1823,7 +1823,24 @@ implements BufferFacade, Cloneable
         processPosition();
     }
 
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
+    /* Float                                                                                                                         */
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
 
+    @Override
+    public float getFloat() {
+        return getFloat(getByteOrder());
+    }
+
+    /**
+     * Retrieves a four-byte integer starting at the current position.
+     * @return
+     */
+    public float getFloat(ByteOrder byteOrder) {
+        final int bits = getInt(byteOrder);
+        float value = Float.intBitsToFloat(bits);
+        return value;
+    }
 
 
     /**

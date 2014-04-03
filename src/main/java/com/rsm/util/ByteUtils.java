@@ -1,5 +1,10 @@
 package com.rsm.util;
 
+import sun.misc.Unsafe;
+import uk.co.real_logic.sbe.util.BitUtil;
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Arrays;
 
 /**
@@ -11,6 +16,10 @@ public abstract class ByteUtils {
     public static final byte SPACE = (byte) ' ';
     public static final byte ZERO = (byte) 0;
 
+    public static final ByteOrder NATIVE_BYTE_ORDER = ByteOrder.nativeOrder();
+    public static final Unsafe UNSAFE = BitUtil.getUnsafe();
+    public static final long BYTE_ARRAY_OFFSET = UNSAFE.arrayBaseOffset(byte[].class);
+
     public static byte[] fillWithSpaces(byte[] byteArray) {
         Arrays.fill(byteArray, SPACE);
         return byteArray;
@@ -21,9 +30,119 @@ public abstract class ByteUtils {
         return byteArray;
     }
 
+    /**
+     * @see uk.co.real_logic.sbe.codec.java.DirectBuffer#wrap(byte[])
+     * @param buffer
+     * @return
+     */
+    public static long getAddressOffset(final byte[] buffer) {
+        return BYTE_ARRAY_OFFSET;
+    }
+
+    /**
+     * @see uk.co.real_logic.sbe.codec.java.DirectBuffer#wrap(java.nio.ByteBuffer)
+     * @param buffer
+     * @return
+     */
+    public static long getAddressOffset(final ByteBuffer buffer) {
+        long addressOffset;
+        if (buffer.hasArray())
+        {
+            addressOffset = BYTE_ARRAY_OFFSET + buffer.arrayOffset();
+        }
+        else
+        {
+            addressOffset = ((sun.nio.ch.DirectBuffer)buffer).address();
+        }
+        return addressOffset;
+    }
+
+    public static byte[] getByteArray(final ByteBuffer buffer) {
+        if (buffer.hasArray())
+        {
+            return buffer.array();
+        }
+        else
+        {
+            return null;
+        }
+    }
+
     /* ----------------------------------------------------------------------------------------------------------------------------- */
     /* Short                                                                                                                         */
     /* ----------------------------------------------------------------------------------------------------------------------------- */
+
+    /**
+     * @see java.nio.Bits#getShort(java.nio.ByteBuffer, int, boolean)
+     * @param bytes
+     * @param position
+     * @param bigEndian
+     * @return
+     */
+    public static short getShort(byte[] bytes, int position, boolean bigEndian) {
+        return bigEndian ? getShortBigEndian(bytes, position) : getShortLittleEndian(bytes, position);
+    }
+
+    /**
+     * @see java.nio.Bits#getShortB(java.nio.ByteBuffer, int)
+     * @param bytes
+     * @param position
+     * @return
+     */
+    public static short getShortBigEndian(byte[] bytes, int position) {
+        return makeShort(   bytes[position],
+                            bytes[position + 1] );
+    }
+
+    /**
+     * @see java.nio.Bits#getShortL(java.nio.ByteBuffer, int)
+     * @param bytes
+     * @param position
+     * @return
+     */
+    public static short getShortLittleEndian(byte[] bytes, int position) {
+        return makeShort(   bytes[position + 1],
+                            bytes[position] );
+    }
+
+    /**
+     * @see java.nio.Bits#putShort(java.nio.ByteBuffer, int, short, boolean)
+     *
+     * @param bytes
+     * @param position
+     * @param x
+     * @param bigEndian
+     */
+    public static void putShort(byte[] bytes, int position, short x, boolean bigEndian) {
+        if (bigEndian)
+            putShortBigEndian(bytes, position, x);
+        else
+            putShortLittleEndian(bytes, position, x);
+    }
+
+    /**
+     * @see java.nio.Bits#putShortB(java.nio.ByteBuffer, int, short)
+     *
+     * @param bytes
+     * @param bi
+     * @param x
+     */
+    public static void putShortBigEndian(byte[] bytes, int bi, short x) {
+        bytes[bi + 1] = short0(x) ;
+        bytes[bi    ] = short1(x);
+    }
+
+    /**
+     * @see java.nio.Bits#putShortL(java.nio.ByteBuffer, int, short)
+     *
+     * @param bytes
+     * @param bi
+     * @param x
+     */
+    public static void putShortLittleEndian(byte[] bytes, int bi, short x) {
+        bytes[bi    ] = short0(x) ;
+        bytes[bi + 1] = short1(x);
+    }
 
     /**
      * @see java.nio.Bits#makeShort(byte, byte)
@@ -49,16 +168,133 @@ public abstract class ByteUtils {
      */
     public static byte short0(short x) { return (byte)(x     ); }
 
-//    public static void putShort(long a, short x, boolean bigEndian) {
-//        if (bigEndian)
-//            putShortB(a, x);
-//        else
-//            putShortL(a, x);
-//    }
-
     /* ----------------------------------------------------------------------------------------------------------------------------- */
     /* Integer                                                                                                                         */
     /* ----------------------------------------------------------------------------------------------------------------------------- */
+
+    /**
+     * java.nio.Bits#getInt(java.nio.ByteBuffer, int, boolean)
+     *
+     * @param bytes
+     * @param position
+     * @param bigEndian
+     * @return
+     */
+    public static int getInt(byte[] bytes, int position, boolean bigEndian) {
+        return bigEndian ? getIntBigEndian(bytes, position) : getIntLittleEndian(bytes, position) ;
+    }
+
+    /**
+     * @see java.nio.Bits#getIntB(java.nio.ByteBuffer, int)
+     *
+     * @param bytes
+     * @param position
+     * @return
+     */
+    public static int getIntBigEndian(byte[] bytes, int position) {
+        return makeInt( bytes[position    ],
+                        bytes[position + 1],
+                        bytes[position + 2],
+                        bytes[position + 3]
+                );
+    }
+
+    /**
+     * @see java.nio.Bits#getIntL(java.nio.ByteBuffer, int)
+     *
+     * @param bytes
+     * @param position
+     * @return
+     */
+    public static int getIntLittleEndian(byte[] bytes, int position) {
+        return makeInt( bytes[position + 3],
+                        bytes[position + 2],
+                        bytes[position + 1],
+                        bytes[position    ]
+                );
+    }
+
+    /**
+     * @see java.nio.Bits#getInt(java.nio.ByteBuffer, int, boolean)
+     * @see uk.co.real_logic.sbe.codec.java.DirectBuffer#getInt(int, java.nio.ByteOrder)
+     *
+     * @param bb
+     * @param bi
+     * @param bigEndian
+     * @return
+     */
+    public static int getInt(ByteBuffer bb, int bi, boolean bigEndian) {
+        return bigEndian ? getIntB(bb, bi) : getIntL(bb, bi) ;
+    }
+
+    /**
+     * @see java.nio.Bits#getInt(java.nio.ByteBuffer, int, boolean)
+     * @see uk.co.real_logic.sbe.codec.java.DirectBuffer#getInt(int, java.nio.ByteOrder)
+     *
+     * @param bb
+     * @param index
+     * @return
+     */
+    public static int getIntB(ByteBuffer bb, int index) {
+        return getInt(bb, index, ByteOrder.BIG_ENDIAN);
+    }
+
+    public static int getIntL(ByteBuffer bb, int index) {
+        return getInt(bb, index, ByteOrder.LITTLE_ENDIAN);
+    }
+
+    public static int getInt(ByteBuffer bb, int index, ByteOrder byteOrder) {
+        final long addressOffset = getAddressOffset(bb);
+        final byte[] byteArray = getByteArray(bb);
+        int bits = UNSAFE.getInt(byteArray, addressOffset + index);
+        if (NATIVE_BYTE_ORDER != byteOrder)
+        {
+            bits = Integer.reverseBytes(bits);
+        }
+        return bits;
+    }
+
+    /**
+     * @see java.nio.Bits#putInt(java.nio.ByteBuffer, int, int, boolean)
+     * @param bytes
+     * @param position
+     * @param x
+     * @param bigEndian
+     */
+    public static void putInt(byte[] bytes, int position, int x, boolean bigEndian) {
+        if (bigEndian)
+            putIntBigEndian(bytes, position, x);
+        else
+            putIntLittleEndian(bytes, position, x);
+    }
+
+    /**
+     * @see java.nio.Bits#putIntB(java.nio.ByteBuffer, int, int)
+     *
+     * @param bytes
+     * @param position
+     * @param x
+     */
+    public static void putIntBigEndian(byte[] bytes, int position, int x) {
+        bytes[position    ] = int3(x);
+        bytes[position + 1] = int2(x);
+        bytes[position + 2] = int1(x);
+        bytes[position + 3] = int0(x);
+    }
+
+    /**
+     * @see java.nio.Bits#putIntL(java.nio.ByteBuffer, int, int)
+     *
+     * @param bytes
+     * @param position
+     * @param x
+     */
+    public static void putIntLittleEndian(byte[] bytes, int position, int x) {
+        bytes[position + 3] = int3(x);
+        bytes[position + 2] = int2(x);
+        bytes[position + 1] = int1(x);
+        bytes[position    ] = int0(x);
+    }
 
     /**
      * @see java.nio.Bits#makeInt(byte, byte, byte, byte)
@@ -276,4 +512,96 @@ public abstract class ByteUtils {
      * @return
      */
     public static byte long0(long x) { return (byte)(x      ); }
+
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
+    /* Float                                                                                                                         */
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
+
+    /**
+     * @see java.nio.Bits#getFloat(java.nio.ByteBuffer, int, boolean)
+     *
+     * @param bytes
+     * @param position
+     * @param bigEndian
+     * @return
+     */
+    public static float getFloat(byte[] bytes, int position, boolean bigEndian) {
+        return bigEndian ? getFloatBigEndian(bytes, position) : getFloatLittleEndian(bytes, position);
+    }
+
+    /**
+     * @see java.nio.Bits#getFloatL(java.nio.ByteBuffer, int)
+     * @param bytes
+     * @param position
+     * @return
+     */
+    public static float getFloatBigEndian(byte[] bytes, int position) {
+        return Float.intBitsToFloat(getIntBigEndian(bytes, position));
+    }
+
+    /**
+     * @see java.nio.Bits#getFloatL(java.nio.ByteBuffer, int)
+     * @param bytes
+     * @param position
+     * @return
+     */
+    public static float getFloatLittleEndian(byte[] bytes, int position) {
+        return Float.intBitsToFloat(getIntLittleEndian(bytes, position));
+    }
+
+    /**
+     * @see java.nio.Bits#getFloat(java.nio.ByteBuffer, int, boolean)
+     * @param bb
+     * @param bi
+     * @param bigEndian
+     * @return
+     */
+    public static float getFloat(ByteBuffer bb, int bi, boolean bigEndian) {
+        return bigEndian ? getFloatB(bb, bi) : getFloatL(bb, bi);
+    }
+
+    public static float getFloatB(ByteBuffer bb, int bi) {
+        return Float.intBitsToFloat(getIntB(bb, bi));
+    }
+
+    public static float getFloatL(ByteBuffer bb, int bi) {
+        return Float.intBitsToFloat(getIntL(bb, bi));
+    }
+
+    /**
+     * @see java.nio.Bits#putFloat(java.nio.ByteBuffer, int, float, boolean)
+     *
+     * @param bytes
+     * @param position
+     * @param x
+     * @param bigEndian
+     */
+    public static void putFloat(byte[] bytes, int position, float x, boolean bigEndian) {
+        if (bigEndian)
+            putFloatBigEndian(bytes, position, x);
+        else
+            putFloatLittleEndian(bytes, position, x);
+    }
+
+    /**
+     * @see java.nio.Bits#putFloatB(java.nio.ByteBuffer, int, float)
+     *
+     * @param bytes
+     * @param position
+     * @param x
+     */
+    public static void putFloatBigEndian(byte[] bytes, int position, float x) {
+        putIntBigEndian(bytes, position, Float.floatToRawIntBits(x));
+    }
+
+    /**
+     * @see java.nio.Bits#putFloatL(java.nio.ByteBuffer, int, float)
+     *
+     * @param bytes
+     * @param position
+     * @param x
+     */
+    public static void putFloatLittleEndian(byte[] bytes, int position, float x) {
+        putIntLittleEndian(bytes, position, Float.floatToRawIntBits(x));
+    }
 }
