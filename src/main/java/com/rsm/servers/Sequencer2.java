@@ -370,7 +370,7 @@ public class Sequencer2 {
         String indexFileSuffix = "index";
         String dataFileSuffix = "data";
         int dataFileBlockSize = ChronicleConfig.SMALL.dataBlockSize();
-        long dataFileInitialFileSize = ChronicleConfig.SMALL.dataBlockSize();
+        long dataFileInitialFileSize = ChronicleConfig.HUGE.dataBlockSize();
         long dataFileGrowBySize = ChronicleConfig.SMALL.dataBlockSize();
 
         int indexFileBlockSize = BitUtil.SIZE_OF_LONG*2*1_000_000; //accomodate 1,000,000 entries
