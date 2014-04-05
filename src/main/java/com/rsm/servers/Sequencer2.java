@@ -15,13 +15,11 @@ import uk.co.real_logic.sbe.codec.java.DirectBuffer;
 import uk.co.real_logic.sbe.util.BitUtil;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.channels.DatagramChannel;
-import java.nio.channels.MembershipKey;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
+import java.nio.channels.*;
 import java.nio.charset.Charset;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
@@ -42,7 +40,7 @@ public class Sequencer2 {
     public static final String EVENT_MULTICAST_IP = "FF02:0:0:0:0:0:0:4";
     public static final int EVENT_MULTICAST_PORT = 9001;
 
-    private final int logModCount = 100_000;
+    private final int logModCount = 500_000;
 
     DatagramChannel commandChannel = null;
     MembershipKey commandMembershipKey = null;
@@ -113,6 +111,7 @@ public class Sequencer2 {
         InetSocketAddress inetSocketAddress = new InetSocketAddress(COMMAND_MULTICAST_PORT);
         commandChannel.bind(inetSocketAddress);
         commandChannel.setOption(StandardSocketOptions.IP_MULTICAST_IF, networkInterface);
+        commandChannel.setOption(StandardSocketOptions.SO_RCVBUF, MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE*10);
 
         // join the multicast group on the network interface
         InetAddress commandGroup = InetAddress.getByName(COMMAND_MULTICAST_IP);
@@ -122,7 +121,7 @@ public class Sequencer2 {
         eventChannel = DatagramChannel.open(StandardProtocolFamily.INET6);
         eventChannel.bind(null);
         eventChannel.setOption(StandardSocketOptions.IP_MULTICAST_IF, networkInterface);
-        eventChannel.setOption(StandardSocketOptions.SO_SNDBUF, eventByteBuffer.capacity()*2);
+        eventChannel.setOption(StandardSocketOptions.SO_SNDBUF, MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE*10);
         eventChannel.configureBlocking(false);
         final SelectionKey writableSelectionKey = eventChannel.register(selector, 0, eventByteBuffer);
 
@@ -132,6 +131,9 @@ public class Sequencer2 {
         commandChannel.configureBlocking(false);
 
         final SelectionKey readableSelectionKey = commandChannel.register(selector, SelectionKey.OP_READ, commandByteBuffer);
+
+        printOptions(commandChannel, "command ", "");
+        printOptions(eventChannel, "event ", "");
 
         boolean active = true;
         StringBuilder sb = new StringBuilder(1024);
@@ -337,6 +339,14 @@ public class Sequencer2 {
         System.out.format("-- datagram from %s --\n",
                 ((InetSocketAddress) sa).getAddress().getHostAddress());
         System.out.println(Charset.defaultCharset().decode(buf));
+    }
+
+
+    private static void printOptions(NetworkChannel channel, String prefix, String suffix) throws IOException {
+        log.info(prefix + channel.getClass().getSimpleName() + suffix + " supports:");
+        for (SocketOption<?> option : channel.supportedOptions()) {
+            log.info("\t" + option.name() + ": " + channel.getOption(option));
+        }
     }
 
     private NetworkInterface getNetworkInterface() throws SocketException {
