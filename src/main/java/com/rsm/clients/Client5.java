@@ -1,6 +1,8 @@
 package com.rsm.clients;
 
 import com.rsm.buffer.MappedFileBuffer;
+import com.rsm.io.selector.SelectedSelectionKeySet;
+import com.rsm.io.selector.SelectorUtil;
 import com.rsm.message.nasdaq.SequenceUtility;
 import com.rsm.message.nasdaq.binaryfile.BinaryFile;
 import com.rsm.message.nasdaq.itch.v4_1.*;
@@ -78,6 +80,11 @@ public class Client5 {
     private int eventSequenceIndex;
     private int sourceSequenceIndex;
 
+    private final SelectedSelectionKeySet selectedKeys = new SelectedSelectionKeySet();
+    private volatile int ioRatio = 50;
+    private int cancelledKeys;
+    private boolean needsToSelectAgain;
+
     public Client5() throws Exception {
         source = ByteUtils.getLongBigEndian(sourceString.getBytes(), 0);
         ByteUtils.fillWithSpaces(commandSourceBytes);
@@ -144,24 +151,24 @@ public class Client5 {
             eventMembershipKey = eventChannel.join(eventGroup, networkInterface);
 
             Selector selector = Selector.open();
+            SelectorUtil.optimizeSelector(selector, selectedKeys);
+
             SelectionKey commandSelectionKey = commandChannel.register(selector, SelectionKey.OP_WRITE, commandByteBuffer);
             SelectionKey eventSelectionKey = eventChannel.register(selector, SelectionKey.OP_READ, eventByteBuffer);
-
-//            commandSelectionKey.attach(commandByteBuffer);
-//            eventSelectionKey.attach(eventByteBuffer);
 
             boolean active = true;
             StringBuilder sb = new StringBuilder(1024);
             while(active  && binaryFile.hasNext()) {
                 int selected = selector.selectNow();
-                if(selected <= 0) {
-                    continue;
-                }
-                Set<SelectionKey> selectionKeys = selector.selectedKeys();
-                Iterator<SelectionKey> iterator = selectionKeys.iterator();
-                while (iterator.hasNext()) {
-                    SelectionKey selectionKey = iterator.next();
-                    iterator.remove();
+                final int size = selectedKeys.size();
+                assert(selected == size);
+                SelectionKey[] selectionKeys = selectedKeys.flip();
+
+                for (int i = 0; i<selected; i ++) {
+                    SelectionKey selectionKey = selectionKeys[i];
+                    final Object a = selectionKey.attachment();
+
+
                     if (selectionKey.isAcceptable()) {
 
                     }
@@ -345,7 +352,7 @@ public class Client5 {
                             commandByteBuffer.clear();
                             commandPosition = commandByteBuffer.position();
 //                            eventChannel.register(selector, SelectionKey.OP_READ);
-                            eventSelectionKey.interestOps(SelectionKey.OP_READ);
+//                            eventSelectionKey.interestOps(SelectionKey.OP_READ);
                         }
                     }
                 }

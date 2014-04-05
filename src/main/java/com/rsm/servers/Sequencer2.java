@@ -1,5 +1,7 @@
 package com.rsm.servers;
 
+import com.rsm.io.selector.SelectedSelectionKeySet;
+import com.rsm.io.selector.SelectorUtil;
 import com.rsm.message.nasdaq.SequenceUtility;
 import com.rsm.message.nasdaq.binaryfile.IndexedBinaryFile;
 import com.rsm.message.nasdaq.binaryfile.IndexedBinaryFileConfig;
@@ -75,6 +77,11 @@ public class Sequencer2 {
     private final byte[] commandSourceBytes = new byte[BitUtil.SIZE_OF_LONG];
     private final byte[] eventSourceBytes = new byte[BitUtil.SIZE_OF_LONG];
 
+    private final SelectedSelectionKeySet selectedKeys = new SelectedSelectionKeySet();
+    private volatile int ioRatio = 50;
+    private int cancelledKeys;
+    private boolean needsToSelectAgain;
+
     public Sequencer2(SequencerConfig sequencerConfig) throws Exception {
         ByteUtils.fillWithSpaces(commandSourceBytes);
         ByteUtils.fillWithSpaces(eventSourceBytes);
@@ -96,6 +103,7 @@ public class Sequencer2 {
         eventPosition = 0;
 
         Selector selector = Selector.open();
+        SelectorUtil.optimizeSelector(selector, selectedKeys);
 
         NetworkInterface networkInterface = getNetworkInterface();
 
@@ -128,12 +136,21 @@ public class Sequencer2 {
         boolean active = true;
         StringBuilder sb = new StringBuilder(1024);
         while(active) {
-            int updated = selector.selectNow();
-            if (updated > 0) {
-                Iterator<SelectionKey> iter = selector.selectedKeys().iterator();
-                while (iter.hasNext()) {
-                    SelectionKey selectionKey = iter.next();
-                    iter.remove();
+            cancelledKeys = 0;
+            needsToSelectAgain = false;
+            final long ioStartTime = System.nanoTime();
+            int selected = selector.selectNow();
+            final int size = selectedKeys.size();
+            assert(selected == size);
+            SelectionKey[] selectionKeys = selectedKeys.flip();
+//            if(size == 0) {
+//                continue;
+//            }
+//            if ( (size > 0) ) { //&& (size > 0)
+                for (int i = 0; i<size; i ++) {
+                    SelectionKey selectionKey = selectionKeys[i];
+
+                    final Object a = selectionKey.attachment();
 
                     if(selectionKey.isReadable()) {
                         DatagramChannel ch = (DatagramChannel)selectionKey.channel();
@@ -225,7 +242,7 @@ public class Sequencer2 {
                                 short len = (short)(eventMoldUDP64Packet.size() + eventStreamHeader.size() + BitUtil.SIZE_OF_SHORT + payloadSize);
                                 assert(remaining == len);
                                 indexedBinaryFile.increment(len, eventByteBuffer);
-                                indexedBinaryFile.force();
+//                                indexedBinaryFile.force();
 //                                eventByteBuffer.flip();
 
 //                            log.info("[seq="+sourceSequence+"][commandPosition="+commandPosition+"][messageLength="+messageLength+"]");
@@ -251,7 +268,7 @@ public class Sequencer2 {
                                     commandByteBuffer.clear();
                                     commandPosition = commandByteBuffer.position();
 //                                eventChannel.register(selector, SelectionKey.OP_WRITE);
-                                    writableSelectionKey.interestOps(SelectionKey.OP_WRITE);
+                                  writableSelectionKey.interestOps(SelectionKey.OP_WRITE);
                                 }
 //                            else {
 //                                commandByteBuffer.compact();
@@ -263,31 +280,56 @@ public class Sequencer2 {
                         int eventLimit = eventPosition;
                         eventPosition = eventByteBuffer.position();
                         eventByteBuffer.flip();
-                        int eventBytesSent = eventChannel.send(eventByteBuffer, eventGroup);
-                        //                            eventSequence++;
-                        sequenceUtility.incrementSequence(eventSequenceIndex);
+                        if(eventByteBuffer.hasRemaining()) {
+                            int eventBytesSent = eventChannel.send(eventByteBuffer, eventGroup);
+                            //                            eventSequence++;
+                            sequenceUtility.incrementSequence(eventSequenceIndex);
 
-                        long eventSequence = sequenceUtility.getSequence(eventSequenceIndex);
-                        if((eventSequence <= 10) || (eventSequence % logModCount == 0)) {
-                            sb.setLength(0);
-                            sb.append("event:")
-                                    .append("[sequence=").append(eventSequence).append("]")
-                                    .append("[eventBytesSent=").append(eventBytesSent).append("]")
-                            ;
-                            log.info(sb.toString());
-                        }
-                        if(!eventByteBuffer.hasRemaining()){
+                            long eventSequence = sequenceUtility.getSequence(eventSequenceIndex);
+                            if((eventSequence <= 10) || (eventSequence % logModCount == 0)) {
+                                sb.setLength(0);
+                                sb.append("event:")
+                                        .append("[sequence=").append(eventSequence).append("]")
+                                        .append("[eventBytesSent=").append(eventBytesSent).append("]")
+                                ;
+                                log.info(sb.toString());
+                            }
+                            if(!eventByteBuffer.hasRemaining()){
 //                            selectionKey.cancel();
 //                            eventChannel.register(selector, 0);
-                            writableSelectionKey.interestOps(0);
-                            eventByteBuffer.clear();
-                            eventPosition = eventByteBuffer.position();
+                              writableSelectionKey.interestOps(0);
+                              eventByteBuffer.clear();
+                              eventPosition = eventByteBuffer.position();
 //                            commandChannel.register(selector, SelectionKey.OP_READ);
 //                            readableSelectionKey.interestOps(SelectionKey.OP_READ);
+                            }
                         }
                     }
+
+                    if (needsToSelectAgain) {
+                        selectAgain(selector);
+                        // Need to flip the optimized selectedKeys to get the right reference to the array
+                        // and reset the index to -1 which will then set to 0 on the for loop
+                        // to start over again.
+                        //
+                        // See https://github.com/netty/netty/issues/1523
+                        selectionKeys = this.selectedKeys.flip();
+                        i = -1;
+                    }
+
+                    final long ioTime = System.nanoTime() - ioStartTime;
+                    final int ioRatio = this.ioRatio;
                 }
-            }
+//            }
+        }
+    }
+
+    private void selectAgain(Selector selector) {
+        needsToSelectAgain = false;
+        try {
+            selector.selectNow();
+        } catch (Throwable t) {
+            log.warn("Failed to update SelectionKeys.", t);
         }
     }
 
