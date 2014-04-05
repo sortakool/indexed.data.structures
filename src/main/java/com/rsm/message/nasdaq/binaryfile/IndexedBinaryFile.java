@@ -92,10 +92,10 @@ public class IndexedBinaryFile {
         this.indexFile = this.indexFilePath.toFile();
 
         dataMappedFile = new MappedFileBuffer(dataFile, this.dataFileBlockSize, this.dataFileInitialFileSize, this.dataFileGrowBySize, true, deleteIfExists);
-        dataMappedFile.setByteOrder(byteOrder);
+//        dataMappedFile.setByteOrder(byteOrder);
 
         indexMappedFile = new MappedFileBuffer(indexFile, this.indexFileBlockSize, this.indexFileInitialFileSize, this.indexFileGrowBySize, true, deleteIfExists);
-        indexMappedFile.setByteOrder(byteOrder);
+//        indexMappedFile.setByteOrder(byteOrder);
 
         initialize();
     }
@@ -161,7 +161,7 @@ public class IndexedBinaryFile {
         }
         else if(theSequence > 1) {
             final long indexFilePosition = ((theSequence - 1) * INDEX_FILE_ROW_LENGTH) + BitUtil.SIZE_OF_LONG;
-            final long payloadPosition = indexMappedFile.getLong(indexFilePosition);
+            final long payloadPosition = indexMappedFile.getLong(indexFilePosition, byteOrder);
             return payloadPosition;
         }
         else {

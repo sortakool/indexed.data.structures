@@ -186,6 +186,7 @@ implements BufferFacade, Cloneable
                 long thisSegmentSize = Math.min(2L * segmentSize, remainingFileSize);
                 _buffers[bufIdx++] = _channel.map(mapMode, offset, thisSegmentSize);
             }
+            setByteOrder(NATIVE_BYTE_ORDER);
             position = 0;
             currentByteBuffer = buffer(position);
             currentIndex = getBuffersIndex(position);
@@ -236,6 +237,7 @@ implements BufferFacade, Cloneable
      private void map(MapMode mapMode, MappedByteBuffer[] mappedByteBuffer, int bufIdx, long offset, long thisSegmentSize) {
          try {
              mappedByteBuffer[bufIdx] = MapUtils.getMap(_channel, mapMode, offset, thisSegmentSize);
+             mappedByteBuffer[bufIdx].order(NATIVE_BYTE_ORDER);
          }
          catch(IOException e) {
              log.warn("Unable to memory-map file at index " + bufIdx, e);
@@ -429,38 +431,26 @@ implements BufferFacade, Cloneable
         if (remaining < 2) {
             byte short0 = 0;
             byte short1 = 0;
-            if (getByteOrder() == ByteOrder.BIG_ENDIAN) {
-                switch (remaining) {
-                    case 1:
-                        short1 = currentByteBuffer.get();
-                        position += 1;
-                        currentByteBuffer = buffer(position);
-                        short0 = currentByteBuffer.get();
-                        position += 1;
-                        break;
-                }
-            } else {      //ByteOrder.LITTLE_ENDIAN
-                switch (remaining) {
-                    case 1:
-                        short0 = currentByteBuffer.get();
-                        position += 1;
-                        currentByteBuffer = buffer(position);
-                        short1 = currentByteBuffer.get();
-                        position += 1;
-                        break;
-                }
+            switch (remaining) {
+                case 1:
+                    short1 = currentByteBuffer.get();
+                    position += 1;
+                    currentByteBuffer = buffer(position);
+                    short0 = currentByteBuffer.get();
+                    position += 1;
+                    break;
             }
             value = ByteUtils.makeShort(short1, short0);
         }
         else {
             value = currentByteBuffer.getShort();
-            if(getByteOrder() != byteOrder) {
-                value = Short.reverseBytes(value);
-            }
             position += 2;
         }
         processPosition();
         unmap(oldPosition, position);
+        if(NATIVE_BYTE_ORDER != byteOrder) {
+            value = Short.reverseBytes(value);
+        }
         return value;
     }
 
@@ -476,39 +466,26 @@ implements BufferFacade, Cloneable
         if (remaining < 2) {
             byte short0 = 0;
             byte short1 = 0;
-            if (getByteOrder() == ByteOrder.BIG_ENDIAN) {
-                switch (remaining) {
-                    case 1:
-                        short1 = buffer.get();
-                        index += 1;
-                        buffer = buffer(index);
-                        short0 = buffer.get();
-                        index += 1;
-                        break;
-                }
-            }
-            else {      //ByteOrder.LITTLE_ENDIAN
-                switch (remaining) {
-                    case 1:
-                        short0 = buffer.get();
-                        index += 1;
-                        buffer = buffer(index);
-                        short1 = buffer.get();
-                        index += 1;
-                        break;
-                }
+            switch (remaining) {
+                case 1:
+                    short1 = buffer.get();
+                    index += 1;
+                    buffer = buffer(index);
+                    short0 = buffer.get();
+                    index += 1;
+                    break;
             }
             value = ByteUtils.makeShort(short1, short0);
         }
         else {
             value = buffer.getShort();
-            if(getByteOrder() != byteOrder) {
-                value = Short.reverseBytes(value);
-            }
             index += 2;
         }
         processPosition();
         unmap(oldPosition, index);
+        if(NATIVE_BYTE_ORDER != byteOrder) {
+            value = Short.reverseBytes(value);
+        }
         return value;
     }
 
@@ -526,34 +503,22 @@ implements BufferFacade, Cloneable
     public void putShort(long index, short value, ByteOrder byteOrder)
     {
         long oldPosition = index;
+        if(NATIVE_BYTE_ORDER != byteOrder) {
+            value = Short.reverseBytes(value);
+        }
         final MappedByteBuffer buffer = buffer(index);
         int remaining = buffer.remaining();
         if(remaining < 2) {
-            if (getByteOrder() == ByteOrder.BIG_ENDIAN) {
-                switch (remaining) {
-                    case 1:
-                        buffer.put(ByteUtils.short1(value));
-                        index += 1;
-                        buffer.put(ByteUtils.short0(value));
-                        index += 1;
-                        break;
-                }
-            }
-            else { //ByteOrder.LITTLE_ENDIAN
-                switch(remaining) {
-                    case 1:
-                        buffer.put(ByteUtils.short0(value));
-                        index += 1;
-                        buffer.put(ByteUtils.short1(value));
-                        index += 1;
-                        break;
-                }
+            switch (remaining) {
+                case 1:
+                    buffer.put(ByteUtils.short1(value));
+                    index += 1;
+                    buffer.put(ByteUtils.short0(value));
+                    index += 1;
+                    break;
             }
         }
         else {
-            if(getByteOrder() != byteOrder) {
-                value = Short.reverseBytes(value);
-            }
             buffer(index).putShort(value);
             index += 2;
         }
@@ -575,35 +540,22 @@ implements BufferFacade, Cloneable
     public void putShort(short value, ByteOrder byteOrder)
     {
         long oldPosition = position;
+        if(NATIVE_BYTE_ORDER != byteOrder) {
+            value = Short.reverseBytes(value);
+        }
         int remaining = currentByteBuffer.remaining();
         if(remaining < 2) {
-            if (getByteOrder() == ByteOrder.BIG_ENDIAN) {
-                switch (remaining) {
-                    case 1:
-                        currentByteBuffer.put(ByteUtils.short1(value));
-                        position += 1;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.short0(value));
-                        position += 1;
-                        break;
-                }
-            }
-            else { //ByteOrder.LITTLE_ENDIAN
-                switch(remaining) {
-                    case 1:
-                        currentByteBuffer.put(ByteUtils.short0(value));
-                        position += 1;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.short1(value));
-                        position += 1;
-                        break;
-                }
+            switch (remaining) {
+                case 1:
+                    currentByteBuffer.put(ByteUtils.short1(value));
+                    position += 1;
+                    currentByteBuffer = buffer(position);
+                    currentByteBuffer.put(ByteUtils.short0(value));
+                    position += 1;
+                    break;
             }
         }
         else {
-            if(getByteOrder() != byteOrder) {
-                value = Short.reverseBytes(value);
-            }
             currentByteBuffer.putShort(value);
             position += 2;
         }
@@ -630,86 +582,53 @@ implements BufferFacade, Cloneable
      */
     public int getInt(ByteOrder byteOrder) {
         long oldPosition = position;
-        int value = 0;
+        int value;
         int remaining = currentByteBuffer.remaining();
         if(remaining < 4) {
             byte int0 = 0;
             byte int1 = 0;
             byte int2 = 0;
             byte int3 = 0;
-            if(getByteOrder() == ByteOrder.BIG_ENDIAN) {
-                switch(remaining) {
-                    case 1:
-                        int3 = currentByteBuffer.get();
-                        position += 1;
-                        currentByteBuffer = buffer(position);
-                        int2 = currentByteBuffer.get();
-                        int1 = currentByteBuffer.get();
-                        int0 = currentByteBuffer.get();
-                        position += 3;
-                        break;
-                    case 2:
-                        int3 = currentByteBuffer.get();
-                        int2 = currentByteBuffer.get();
-                        position += 2;
-                        currentByteBuffer = buffer(position);
-                        int1 = currentByteBuffer.get();
-                        int0 = currentByteBuffer.get();
-                        position += 2;
-                        break;
-                    case 3:
-                        int3 = currentByteBuffer.get();
-                        int2 = currentByteBuffer.get();
-                        int1 = currentByteBuffer.get();
-                        position += 3;
-                        currentByteBuffer = buffer(position);
-                        int0 = currentByteBuffer.get();
-                        position += 1;
-                        break;
-                }
-            }
-            else {      //ByteOrder.LITTLE_ENDIAN
-                switch(remaining) {
-                    case 1:
-                        int0 = currentByteBuffer.get();
-                        position += 1;
-                        currentByteBuffer = buffer(position);
-                        int1 = currentByteBuffer.get();
-                        int2 = currentByteBuffer.get();
-                        int3 = currentByteBuffer.get();
-                        position += 3;
-                        break;
-                    case 2:
-                        int0 = currentByteBuffer.get();
-                        int1 = currentByteBuffer.get();
-                        position += 2;
-                        currentByteBuffer = buffer(position);
-                        int2 = currentByteBuffer.get();
-                        int3 = currentByteBuffer.get();
-                        position += 2;
-                        break;
-                    case 3:
-                        int0 = currentByteBuffer.get();
-                        int1 = currentByteBuffer.get();
-                        int2 = currentByteBuffer.get();
-                        position += 3;
-                        currentByteBuffer = buffer(position);
-                        int3 = currentByteBuffer.get();
-                        position += 1;
-                        break;
-                }
+            switch(remaining) {
+                case 1:
+                    int3 = currentByteBuffer.get();
+                    position += 1;
+                    currentByteBuffer = buffer(position);
+                    int2 = currentByteBuffer.get();
+                    int1 = currentByteBuffer.get();
+                    int0 = currentByteBuffer.get();
+                    position += 3;
+                    break;
+                case 2:
+                    int3 = currentByteBuffer.get();
+                    int2 = currentByteBuffer.get();
+                    position += 2;
+                    currentByteBuffer = buffer(position);
+                    int1 = currentByteBuffer.get();
+                    int0 = currentByteBuffer.get();
+                    position += 2;
+                    break;
+                case 3:
+                    int3 = currentByteBuffer.get();
+                    int2 = currentByteBuffer.get();
+                    int1 = currentByteBuffer.get();
+                    position += 3;
+                    currentByteBuffer = buffer(position);
+                    int0 = currentByteBuffer.get();
+                    position += 1;
+                    break;
             }
             value = ByteUtils.makeInt(int3, int2, int1, int0);
         }
         else {
             value = currentByteBuffer.getInt();
-            if(getByteOrder() != byteOrder) {
-                value = Integer.reverseBytes(value);
-            }
             position += 4;
         }
         processPosition();
         unmap(oldPosition, position);
+        if(NATIVE_BYTE_ORDER != byteOrder) {
+            value = Integer.reverseBytes(value);
+        }
         return value;
     }
 
@@ -723,7 +642,7 @@ implements BufferFacade, Cloneable
     public int getInt(long index, ByteOrder byteOrder)
     {
         long oldPosition = index;
-        int value = 0;
+        int value;
         MappedByteBuffer buffer = buffer(index);
         int remaining = buffer.remaining();
         if(remaining < 4) {
@@ -731,79 +650,46 @@ implements BufferFacade, Cloneable
             byte int1 = 0;
             byte int2 = 0;
             byte int3 = 0;
-            if(getByteOrder() == ByteOrder.BIG_ENDIAN) {
-                switch(remaining) {
-                    case 1:
-                        int3 = buffer.get();
-                        index += 1;
-                        buffer = buffer(index);
-                        int2 = buffer.get();
-                        int1 = buffer.get();
-                        int0 = buffer.get();
-                        index += 3;
-                        break;
-                    case 2:
-                        int3 = buffer.get();
-                        int2 = buffer.get();
-                        index += 2;
-                        buffer = buffer(index);
-                        int1 = buffer.get();
-                        int0 = buffer.get();
-                        index += 2;
-                        break;
-                    case 3:
-                        int3 = buffer.get();
-                        int2 = buffer.get();
-                        int1 = buffer.get();
-                        index += 3;
-                        buffer = buffer(index);
-                        int0 = buffer.get();
-                        index += 1;
-                        break;
-                }
-            }
-            else {      //ByteOrder.LITTLE_ENDIAN
-                switch(remaining) {
-                    case 1:
-                        int0 = currentByteBuffer.get();
-                        index += 1;
-                        buffer = buffer(index);
-                        int1 = currentByteBuffer.get();
-                        int2 = currentByteBuffer.get();
-                        int3 = currentByteBuffer.get();
-                        index += 3;
-                        break;
-                    case 2:
-                        int0 = currentByteBuffer.get();
-                        int1 = currentByteBuffer.get();
-                        index += 2;
-                        buffer = buffer(index);
-                        int2 = currentByteBuffer.get();
-                        int3 = currentByteBuffer.get();
-                        index += 2;
-                        break;
-                    case 3:
-                        int0 = currentByteBuffer.get();
-                        int1 = currentByteBuffer.get();
-                        int2 = currentByteBuffer.get();
-                        index += 3;
-                        buffer = buffer(index);
-                        int3 = currentByteBuffer.get();
-                        index += 1;
-                        break;
-                }
+            switch(remaining) {
+                case 1:
+                    int3 = buffer.get();
+                    index += 1;
+                    buffer = buffer(index);
+                    int2 = buffer.get();
+                    int1 = buffer.get();
+                    int0 = buffer.get();
+                    index += 3;
+                    break;
+                case 2:
+                    int3 = buffer.get();
+                    int2 = buffer.get();
+                    index += 2;
+                    buffer = buffer(index);
+                    int1 = buffer.get();
+                    int0 = buffer.get();
+                    index += 2;
+                    break;
+                case 3:
+                    int3 = buffer.get();
+                    int2 = buffer.get();
+                    int1 = buffer.get();
+                    index += 3;
+                    buffer = buffer(index);
+                    int0 = buffer.get();
+                    index += 1;
+                    break;
             }
             value = ByteUtils.makeInt(int3, int2, int1, int0);
         }
         else {
             value = buffer.getInt();
-            if(getByteOrder() != byteOrder) {
-                value = Integer.reverseBytes(value);
-            }
             index += 4;
         }
         processPosition();
         unmap(oldPosition, index);
+        if(NATIVE_BYTE_ORDER != byteOrder) {
+            value = Integer.reverseBytes(value);
+        }
         return value;
     }
 
@@ -814,75 +700,42 @@ implements BufferFacade, Cloneable
 
     public void putInt(int value, ByteOrder byteOrder) {
         long oldPosition = position;
+        if(NATIVE_BYTE_ORDER != byteOrder) {
+            value = Integer.reverseBytes(value);
+        }
         int remaining = currentByteBuffer.remaining();
         if(remaining < 4) {
-            if (getByteOrder() == ByteOrder.BIG_ENDIAN) {
-                switch(remaining) {
-                    case 1:
-                        currentByteBuffer.put(ByteUtils.int3(value));
-                        position += 1;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.int2(value));
-                        currentByteBuffer.put(ByteUtils.int1(value));
-                        currentByteBuffer.put(ByteUtils.int0(value));
-                        position += 3;
-                        break;
-                    case 2:
-                        currentByteBuffer.put(ByteUtils.int3(value));
-                        currentByteBuffer.put(ByteUtils.int2(value));
-                        position += 2;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.int1(value));
-                        currentByteBuffer.put(ByteUtils.int0(value));
-                        position += 2;
-                        break;
-                    case 3:
-                        currentByteBuffer.put(ByteUtils.int3(value));
-                        currentByteBuffer.put(ByteUtils.int2(value));
-                        currentByteBuffer.put(ByteUtils.int1(value));
-                        position += 3;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.int0(value));
-                        position += 1;
-                        break;
-                }
-            }
-            else { //ByteOrder.LITTLE_ENDIAN
-                switch(remaining) {
-                    case 1:
-                        currentByteBuffer.put(ByteUtils.int0(value));
-                        position += 1;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.int1(value));
-                        currentByteBuffer.put(ByteUtils.int2(value));
-                        currentByteBuffer.put(ByteUtils.int3(value));
-                        position += 3;
-                        break;
-                    case 2:
-                        currentByteBuffer.put(ByteUtils.int0(value));
-                        currentByteBuffer.put(ByteUtils.int1(value));
-                        position += 2;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.int2(value));
-                        currentByteBuffer.put(ByteUtils.int3(value));
-                        position += 2;
-                        break;
-                    case 3:
-                        currentByteBuffer.put(ByteUtils.int0(value));
-                        currentByteBuffer.put(ByteUtils.int1(value));
-                        currentByteBuffer.put(ByteUtils.int2(value));
-                        position += 3;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.int3(value));
-                        position += 1;
-                        break;
-                }
+            switch(remaining) {
+                case 1:
+                    currentByteBuffer.put(ByteUtils.int3(value));
+                    position += 1;
+                    currentByteBuffer = buffer(position);
+                    currentByteBuffer.put(ByteUtils.int2(value));
+                    currentByteBuffer.put(ByteUtils.int1(value));
+                    currentByteBuffer.put(ByteUtils.int0(value));
+                    position += 3;
+                    break;
+                case 2:
+                    currentByteBuffer.put(ByteUtils.int3(value));
+                    currentByteBuffer.put(ByteUtils.int2(value));
+                    position += 2;
+                    currentByteBuffer = buffer(position);
+                    currentByteBuffer.put(ByteUtils.int1(value));
+                    currentByteBuffer.put(ByteUtils.int0(value));
+                    position += 2;
+                    break;
+                case 3:
+                    currentByteBuffer.put(ByteUtils.int3(value));
+                    currentByteBuffer.put(ByteUtils.int2(value));
+                    currentByteBuffer.put(ByteUtils.int1(value));
+                    position += 3;
+                    currentByteBuffer = buffer(position);
+                    currentByteBuffer.put(ByteUtils.int0(value));
+                    position += 1;
+                    break;
             }
         }
         else {
-            if(getByteOrder() != byteOrder) {
-                value = Integer.reverseBytes(value);
-            }
             currentByteBuffer.putInt(value);
             position += 4;
         }
@@ -903,76 +756,43 @@ implements BufferFacade, Cloneable
     public void putInt(long index, int value, ByteOrder byteOrder)
     {
         long oldPosition = index;
+        if(NATIVE_BYTE_ORDER != byteOrder) {
+            value = Integer.reverseBytes(value);
+        }
         ByteBuffer buffer = buffer(index);
         int remaining = buffer.remaining();
         if(remaining < 4) {
-            if (getByteOrder() == ByteOrder.BIG_ENDIAN) {
-                switch(remaining) {
-                    case 1:
-                        buffer.put(ByteUtils.int3(value));
-                        index += 1;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.int2(value));
-                        buffer.put(ByteUtils.int1(value));
-                        buffer.put(ByteUtils.int0(value));
-                        index += 3;
-                        break;
-                    case 2:
-                        buffer.put(ByteUtils.int3(value));
-                        buffer.put(ByteUtils.int2(value));
-                        index += 2;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.int1(value));
-                        buffer.put(ByteUtils.int0(value));
-                        index += 2;
-                        break;
-                    case 3:
-                        buffer.put(ByteUtils.int3(value));
-                        buffer.put(ByteUtils.int2(value));
-                        buffer.put(ByteUtils.int1(value));
-                        index += 3;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.int0(value));
-                        index += 1;
-                        break;
-                }
-            }
-            else { //ByteOrder.LITTLE_ENDIAN
-                switch(remaining) {
-                    case 1:
-                        buffer.put(ByteUtils.int0(value));
-                        index += 1;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.int1(value));
-                        buffer.put(ByteUtils.int2(value));
-                        buffer.put(ByteUtils.int3(value));
-                        index += 3;
-                        break;
-                    case 2:
-                        buffer.put(ByteUtils.int0(value));
-                        buffer.put(ByteUtils.int1(value));
-                        index += 2;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.int2(value));
-                        buffer.put(ByteUtils.int3(value));
-                        index += 2;
-                        break;
-                    case 3:
-                        buffer.put(ByteUtils.int0(value));
-                        buffer.put(ByteUtils.int1(value));
-                        buffer.put(ByteUtils.int2(value));
-                        index += 3;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.int3(value));
-                        index += 1;
-                        break;
-                }
+            switch(remaining) {
+                case 1:
+                    buffer.put(ByteUtils.int3(value));
+                    index += 1;
+                    buffer = buffer(index);
+                    buffer.put(ByteUtils.int2(value));
+                    buffer.put(ByteUtils.int1(value));
+                    buffer.put(ByteUtils.int0(value));
+                    index += 3;
+                    break;
+                case 2:
+                    buffer.put(ByteUtils.int3(value));
+                    buffer.put(ByteUtils.int2(value));
+                    index += 2;
+                    buffer = buffer(index);
+                    buffer.put(ByteUtils.int1(value));
+                    buffer.put(ByteUtils.int0(value));
+                    index += 2;
+                    break;
+                case 3:
+                    buffer.put(ByteUtils.int3(value));
+                    buffer.put(ByteUtils.int2(value));
+                    buffer.put(ByteUtils.int1(value));
+                    index += 3;
+                    buffer = buffer(index);
+                    buffer.put(ByteUtils.int0(value));
+                    index += 1;
+                    break;
             }
         }
         else {
-            if(getByteOrder() != byteOrder) {
-                value = Integer.reverseBytes(value);
-            }
             buffer.putInt(value);
             index += 4;
         }
@@ -990,7 +810,7 @@ implements BufferFacade, Cloneable
 
     public long  getLong(ByteOrder byteOrder) {
         long oldPosition = position;
-        long value = 0;
+        long value;
         int remaining = currentByteBuffer.remaining();
         if(remaining < 8) {
             byte long0 = 0;
@@ -1001,207 +821,110 @@ implements BufferFacade, Cloneable
             byte long5 = 0;
             byte long6 = 0;
             byte long7 = 0;
-            if (getByteOrder() == ByteOrder.BIG_ENDIAN) {
-                switch (remaining) {
-                    case 1:
-                        long7 = currentByteBuffer.get();
-                        position += 1;
-                        currentByteBuffer = buffer(position);
-                        long6 = currentByteBuffer.get();
-                        long5 = currentByteBuffer.get();
-                        long4 = currentByteBuffer.get();
-                        long3 = currentByteBuffer.get();
-                        long2 = currentByteBuffer.get();
-                        long1 = currentByteBuffer.get();
-                        long0 = currentByteBuffer.get();
-                        position += 7;
-                        break;
-                    case 2:
-                        long7 = currentByteBuffer.get();
-                        long6 = currentByteBuffer.get();
-                        position += 2;
-                        currentByteBuffer = buffer(position);
-                        long5 = currentByteBuffer.get();
-                        long4 = currentByteBuffer.get();
-                        long3 = currentByteBuffer.get();
-                        long2 = currentByteBuffer.get();
-                        long1 = currentByteBuffer.get();
-                        long0 = currentByteBuffer.get();
-                        position += 6;
-                        break;
-                    case 3:
-                        long7 = currentByteBuffer.get();
-                        long6 = currentByteBuffer.get();
-                        long5 = currentByteBuffer.get();
-                        position += 3;
-                        currentByteBuffer = buffer(position);
-                        long4 = currentByteBuffer.get();
-                        long3 = currentByteBuffer.get();
-                        long2 = currentByteBuffer.get();
-                        long1 = currentByteBuffer.get();
-                        long0 = currentByteBuffer.get();
-                        position += 5;
-                        break;
-                    case 4:
-                        long7 = currentByteBuffer.get();
-                        long6 = currentByteBuffer.get();
-                        long5 = currentByteBuffer.get();
-                        long4 = currentByteBuffer.get();
-                        position += 4;
-                        currentByteBuffer = buffer(position);
-                        long3 = currentByteBuffer.get();
-                        long2 = currentByteBuffer.get();
-                        long1 = currentByteBuffer.get();
-                        long0 = currentByteBuffer.get();
-                        position += 4;
-                        break;
-                    case 5:
-                        long7 = currentByteBuffer.get();
-                        long6 = currentByteBuffer.get();
-                        long5 = currentByteBuffer.get();
-                        long4 = currentByteBuffer.get();
-                        long3 = currentByteBuffer.get();
-                        position += 5;
-                        currentByteBuffer = buffer(position);
-                        long2 = currentByteBuffer.get();
-                        long1 = currentByteBuffer.get();
-                        long0 = currentByteBuffer.get();
-                        position += 3;
-                        break;
-                    case 6:
-                        long7 = currentByteBuffer.get();
-                        long6 = currentByteBuffer.get();
-                        long5 = currentByteBuffer.get();
-                        long4 = currentByteBuffer.get();
-                        long3 = currentByteBuffer.get();
-                        long2 = currentByteBuffer.get();
-                        position += 6;
-                        currentByteBuffer = buffer(position);
-                        long1 = currentByteBuffer.get();
-                        long0 = currentByteBuffer.get();
-                        position += 2;
-                        break;
-                    case 7:
-                        long7 = currentByteBuffer.get();
-                        long6 = currentByteBuffer.get();
-                        long5 = currentByteBuffer.get();
-                        long4 = currentByteBuffer.get();
-                        long3 = currentByteBuffer.get();
-                        long2 = currentByteBuffer.get();
-                        long1 = currentByteBuffer.get();
-                        position += 7;
-                        currentByteBuffer = buffer(position);
-                        long0 = currentByteBuffer.get();
-                        position += 1;
-                        break;
-                }
-            }
-            else {      //ByteOrder.LITTLE_ENDIAN
-                switch (remaining) {
-                    case 1:
-                        long0 = currentByteBuffer.get();
-                        position += 1;
-                        currentByteBuffer = buffer(position);
-                        long1 = currentByteBuffer.get();
-                        long2 = currentByteBuffer.get();
-                        long3 = currentByteBuffer.get();
-                        long4 = currentByteBuffer.get();
-                        long5 = currentByteBuffer.get();
-                        long6 = currentByteBuffer.get();
-                        long7 = currentByteBuffer.get();
-                        position += 7;
-                        break;
-                    case 2:
-                        long0 = currentByteBuffer.get();
-                        long1 = currentByteBuffer.get();
-                        position += 2;
-                        currentByteBuffer = buffer(position);
-                        long2 = currentByteBuffer.get();
-                        long3 = currentByteBuffer.get();
-                        long4 = currentByteBuffer.get();
-                        long5 = currentByteBuffer.get();
-                        long6 = currentByteBuffer.get();
-                        long7 = currentByteBuffer.get();
-                        position += 6;
-                        break;
-                    case 3:
-                        long0 = currentByteBuffer.get();
-                        long1 = currentByteBuffer.get();
-                        long2 = currentByteBuffer.get();
-                        position += 3;
-                        currentByteBuffer = buffer(position);
-                        long3 = currentByteBuffer.get();
-                        long4 = currentByteBuffer.get();
-                        long5 = currentByteBuffer.get();
-                        long6 = currentByteBuffer.get();
-                        long7 = currentByteBuffer.get();
-                        position += 5;
-                        break;
-                    case 4:
-                        long0 = currentByteBuffer.get();
-                        long1 = currentByteBuffer.get();
-                        long2 = currentByteBuffer.get();
-                        long3 = currentByteBuffer.get();
-                        position += 4;
-                        currentByteBuffer = buffer(position);
-                        long4 = currentByteBuffer.get();
-                        long5 = currentByteBuffer.get();
-                        long6 = currentByteBuffer.get();
-                        long7 = currentByteBuffer.get();
-                        position += 4;
-                        break;
-                    case 5:
-                        long0 = currentByteBuffer.get();
-                        long1 = currentByteBuffer.get();
-                        long2 = currentByteBuffer.get();
-                        long3 = currentByteBuffer.get();
-                        long4 = currentByteBuffer.get();
-                        position += 5;
-                        currentByteBuffer = buffer(position);
-                        long5 = currentByteBuffer.get();
-                        long6 = currentByteBuffer.get();
-                        long7 = currentByteBuffer.get();
-                        position += 3;
-                        break;
-                    case 6:
-                        long0 = currentByteBuffer.get();
-                        long1 = currentByteBuffer.get();
-                        long2 = currentByteBuffer.get();
-                        long3 = currentByteBuffer.get();
-                        long4 = currentByteBuffer.get();
-                        long5 = currentByteBuffer.get();
-                        position += 6;
-                        currentByteBuffer = buffer(position);
-                        long6 = currentByteBuffer.get();
-                        long7 = currentByteBuffer.get();
-                        position += 2;
-                        break;
-                    case 7:
-                        long0 = currentByteBuffer.get();
-                        long1 = currentByteBuffer.get();
-                        long2 = currentByteBuffer.get();
-                        long3 = currentByteBuffer.get();
-                        long4 = currentByteBuffer.get();
-                        long5 = currentByteBuffer.get();
-                        long6 = currentByteBuffer.get();
-                        position += 7;
-                        currentByteBuffer = buffer(position);
-                        long7 = currentByteBuffer.get();
-                        position += 1;
-                        break;
-                }
+            switch (remaining) {
+                case 1:
+                    long7 = currentByteBuffer.get();
+                    position += 1;
+                    currentByteBuffer = buffer(position);
+                    long6 = currentByteBuffer.get();
+                    long5 = currentByteBuffer.get();
+                    long4 = currentByteBuffer.get();
+                    long3 = currentByteBuffer.get();
+                    long2 = currentByteBuffer.get();
+                    long1 = currentByteBuffer.get();
+                    long0 = currentByteBuffer.get();
+                    position += 7;
+                    break;
+                case 2:
+                    long7 = currentByteBuffer.get();
+                    long6 = currentByteBuffer.get();
+                    position += 2;
+                    currentByteBuffer = buffer(position);
+                    long5 = currentByteBuffer.get();
+                    long4 = currentByteBuffer.get();
+                    long3 = currentByteBuffer.get();
+                    long2 = currentByteBuffer.get();
+                    long1 = currentByteBuffer.get();
+                    long0 = currentByteBuffer.get();
+                    position += 6;
+                    break;
+                case 3:
+                    long7 = currentByteBuffer.get();
+                    long6 = currentByteBuffer.get();
+                    long5 = currentByteBuffer.get();
+                    position += 3;
+                    currentByteBuffer = buffer(position);
+                    long4 = currentByteBuffer.get();
+                    long3 = currentByteBuffer.get();
+                    long2 = currentByteBuffer.get();
+                    long1 = currentByteBuffer.get();
+                    long0 = currentByteBuffer.get();
+                    position += 5;
+                    break;
+                case 4:
+                    long7 = currentByteBuffer.get();
+                    long6 = currentByteBuffer.get();
+                    long5 = currentByteBuffer.get();
+                    long4 = currentByteBuffer.get();
+                    position += 4;
+                    currentByteBuffer = buffer(position);
+                    long3 = currentByteBuffer.get();
+                    long2 = currentByteBuffer.get();
+                    long1 = currentByteBuffer.get();
+                    long0 = currentByteBuffer.get();
+                    position += 4;
+                    break;
+                case 5:
+                    long7 = currentByteBuffer.get();
+                    long6 = currentByteBuffer.get();
+                    long5 = currentByteBuffer.get();
+                    long4 = currentByteBuffer.get();
+                    long3 = currentByteBuffer.get();
+                    position += 5;
+                    currentByteBuffer = buffer(position);
+                    long2 = currentByteBuffer.get();
+                    long1 = currentByteBuffer.get();
+                    long0 = currentByteBuffer.get();
+                    position += 3;
+                    break;
+                case 6:
+                    long7 = currentByteBuffer.get();
+                    long6 = currentByteBuffer.get();
+                    long5 = currentByteBuffer.get();
+                    long4 = currentByteBuffer.get();
+                    long3 = currentByteBuffer.get();
+                    long2 = currentByteBuffer.get();
+                    position += 6;
+                    currentByteBuffer = buffer(position);
+                    long1 = currentByteBuffer.get();
+                    long0 = currentByteBuffer.get();
+                    position += 2;
+                    break;
+                case 7:
+                    long7 = currentByteBuffer.get();
+                    long6 = currentByteBuffer.get();
+                    long5 = currentByteBuffer.get();
+                    long4 = currentByteBuffer.get();
+                    long3 = currentByteBuffer.get();
+                    long2 = currentByteBuffer.get();
+                    long1 = currentByteBuffer.get();
+                    position += 7;
+                    currentByteBuffer = buffer(position);
+                    long0 = currentByteBuffer.get();
+                    position += 1;
+                    break;
             }
             value = ByteUtils.makeLong(long7, long6, long5, long4, long3, long2, long1, long0);
         }
         else {
             value = currentByteBuffer.getLong();
-            if(getByteOrder() != byteOrder) {
-                value = Long.reverseBytes(value);
-            }
             position += 8;
         }
         processPosition();
         unmap(oldPosition, position);
+        if(NATIVE_BYTE_ORDER != byteOrder) {
+            value = Long.reverseBytes(value);
+        }
         return value;
     }
 
@@ -1215,7 +938,7 @@ implements BufferFacade, Cloneable
 
     public long  getLong(long index, ByteOrder byteOrder) {
         long oldPosition = index;
-        long value = 0;
+        long value;
         MappedByteBuffer buffer = buffer(index);
         int remaining = buffer.remaining();
         if(remaining < 8) {
@@ -1227,207 +950,110 @@ implements BufferFacade, Cloneable
             byte long5 = 0;
             byte long6 = 0;
             byte long7 = 0;
-            if (getByteOrder() == ByteOrder.BIG_ENDIAN) {
-                switch (remaining) {
-                    case 1:
-                        long7 = buffer.get();
-                        index += 1;
-                        buffer = buffer(index);
-                        long6 = buffer.get();
-                        long5 = buffer.get();
-                        long4 = buffer.get();
-                        long3 = buffer.get();
-                        long2 = buffer.get();
-                        long1 = buffer.get();
-                        long0 = buffer.get();
-                        index += 7;
-                        break;
-                    case 2:
-                        long7 = buffer.get();
-                        long6 = buffer.get();
-                        index += 2;
-                        buffer = buffer(index);
-                        long5 = buffer.get();
-                        long4 = buffer.get();
-                        long3 = buffer.get();
-                        long2 = buffer.get();
-                        long1 = buffer.get();
-                        long0 = buffer.get();
-                        index += 6;
-                        break;
-                    case 3:
-                        long7 = buffer.get();
-                        long6 = buffer.get();
-                        long5 = buffer.get();
-                        index += 3;
-                        buffer = buffer(index);
-                        long4 = buffer.get();
-                        long3 = buffer.get();
-                        long2 = buffer.get();
-                        long1 = buffer.get();
-                        long0 = buffer.get();
-                        index += 5;
-                        break;
-                    case 4:
-                        long7 = buffer.get();
-                        long6 = buffer.get();
-                        long5 = buffer.get();
-                        long4 = buffer.get();
-                        index += 4;
-                        buffer = buffer(index);
-                        long3 = buffer.get();
-                        long2 = buffer.get();
-                        long1 = buffer.get();
-                        long0 = buffer.get();
-                        index += 4;
-                        break;
-                    case 5:
-                        long7 = buffer.get();
-                        long6 = buffer.get();
-                        long5 = buffer.get();
-                        long4 = buffer.get();
-                        long3 = buffer.get();
-                        index += 5;
-                        buffer = buffer(index);
-                        long2 = buffer.get();
-                        long1 = buffer.get();
-                        long0 = buffer.get();
-                        index += 3;
-                        break;
-                    case 6:
-                        long7 = buffer.get();
-                        long6 = buffer.get();
-                        long5 = buffer.get();
-                        long4 = buffer.get();
-                        long3 = buffer.get();
-                        long2 = buffer.get();
-                        index += 6;
-                        buffer = buffer(index);
-                        long1 = buffer.get();
-                        long0 = buffer.get();
-                        index += 2;
-                        break;
-                    case 7:
-                        long7 = buffer.get();
-                        long6 = buffer.get();
-                        long5 = buffer.get();
-                        long4 = buffer.get();
-                        long3 = buffer.get();
-                        long2 = buffer.get();
-                        long1 = buffer.get();
-                        index += 7;
-                        buffer = buffer(index);
-                        long0 = buffer.get();
-                        index += 1;
-                        break;
-                }
-            }
-            else {      //ByteOrder.LITTLE_ENDIAN
-                switch (remaining) {
-                    case 1:
-                        long0 = buffer.get();
-                        index += 1;
-                        buffer = buffer(index);
-                        long1 = buffer.get();
-                        long2 = buffer.get();
-                        long3 = buffer.get();
-                        long4 = buffer.get();
-                        long5 = buffer.get();
-                        long6 = buffer.get();
-                        long7 = buffer.get();
-                        index += 7;
-                        break;
-                    case 2:
-                        long0 = buffer.get();
-                        long1 = buffer.get();
-                        index += 2;
-                        buffer = buffer(index);
-                        long2 = buffer.get();
-                        long3 = buffer.get();
-                        long4 = buffer.get();
-                        long5 = buffer.get();
-                        long6 = buffer.get();
-                        long7 = buffer.get();
-                        index += 6;
-                        break;
-                    case 3:
-                        long0 = buffer.get();
-                        long1 = buffer.get();
-                        long2 = buffer.get();
-                        index += 3;
-                        buffer = buffer(index);
-                        long3 = buffer.get();
-                        long4 = buffer.get();
-                        long5 = buffer.get();
-                        long6 = buffer.get();
-                        long7 = buffer.get();
-                        index += 5;
-                        break;
-                    case 4:
-                        long0 = buffer.get();
-                        long1 = buffer.get();
-                        long2 = buffer.get();
-                        long3 = buffer.get();
-                        index += 4;
-                        buffer = buffer(index);
-                        long4 = buffer.get();
-                        long5 = buffer.get();
-                        long6 = buffer.get();
-                        long7 = buffer.get();
-                        index += 4;
-                        break;
-                    case 5:
-                        long0 = buffer.get();
-                        long1 = buffer.get();
-                        long2 = buffer.get();
-                        long3 = buffer.get();
-                        long4 = buffer.get();
-                        index += 5;
-                        buffer = buffer(index);
-                        long5 = buffer.get();
-                        long6 = buffer.get();
-                        long7 = buffer.get();
-                        index += 3;
-                        break;
-                    case 6:
-                        long0 = buffer.get();
-                        long1 = buffer.get();
-                        long2 = buffer.get();
-                        long3 = buffer.get();
-                        long4 = buffer.get();
-                        long5 = buffer.get();
-                        index += 6;
-                        buffer = buffer(index);
-                        long6 = buffer.get();
-                        long7 = buffer.get();
-                        index += 2;
-                        break;
-                    case 7:
-                        long0 = buffer.get();
-                        long1 = buffer.get();
-                        long2 = buffer.get();
-                        long3 = buffer.get();
-                        long4 = buffer.get();
-                        long5 = buffer.get();
-                        long6 = buffer.get();
-                        index += 7;
-                        buffer = buffer(index);
-                        long7 = buffer.get();
-                        index += 1;
-                        break;
-                }
+            switch (remaining) {
+                case 1:
+                    long7 = buffer.get();
+                    index += 1;
+                    buffer = buffer(index);
+                    long6 = buffer.get();
+                    long5 = buffer.get();
+                    long4 = buffer.get();
+                    long3 = buffer.get();
+                    long2 = buffer.get();
+                    long1 = buffer.get();
+                    long0 = buffer.get();
+                    index += 7;
+                    break;
+                case 2:
+                    long7 = buffer.get();
+                    long6 = buffer.get();
+                    index += 2;
+                    buffer = buffer(index);
+                    long5 = buffer.get();
+                    long4 = buffer.get();
+                    long3 = buffer.get();
+                    long2 = buffer.get();
+                    long1 = buffer.get();
+                    long0 = buffer.get();
+                    index += 6;
+                    break;
+                case 3:
+                    long7 = buffer.get();
+                    long6 = buffer.get();
+                    long5 = buffer.get();
+                    index += 3;
+                    buffer = buffer(index);
+                    long4 = buffer.get();
+                    long3 = buffer.get();
+                    long2 = buffer.get();
+                    long1 = buffer.get();
+                    long0 = buffer.get();
+                    index += 5;
+                    break;
+                case 4:
+                    long7 = buffer.get();
+                    long6 = buffer.get();
+                    long5 = buffer.get();
+                    long4 = buffer.get();
+                    index += 4;
+                    buffer = buffer(index);
+                    long3 = buffer.get();
+                    long2 = buffer.get();
+                    long1 = buffer.get();
+                    long0 = buffer.get();
+                    index += 4;
+                    break;
+                case 5:
+                    long7 = buffer.get();
+                    long6 = buffer.get();
+                    long5 = buffer.get();
+                    long4 = buffer.get();
+                    long3 = buffer.get();
+                    index += 5;
+                    buffer = buffer(index);
+                    long2 = buffer.get();
+                    long1 = buffer.get();
+                    long0 = buffer.get();
+                    index += 3;
+                    break;
+                case 6:
+                    long7 = buffer.get();
+                    long6 = buffer.get();
+                    long5 = buffer.get();
+                    long4 = buffer.get();
+                    long3 = buffer.get();
+                    long2 = buffer.get();
+                    index += 6;
+                    buffer = buffer(index);
+                    long1 = buffer.get();
+                    long0 = buffer.get();
+                    index += 2;
+                    break;
+                case 7:
+                    long7 = buffer.get();
+                    long6 = buffer.get();
+                    long5 = buffer.get();
+                    long4 = buffer.get();
+                    long3 = buffer.get();
+                    long2 = buffer.get();
+                    long1 = buffer.get();
+                    index += 7;
+                    buffer = buffer(index);
+                    long0 = buffer.get();
+                    index += 1;
+                    break;
             }
             value = ByteUtils.makeLong(long7, long6, long5, long4, long3, long2, long1, long0);
         }
         else {
             value = buffer.getLong();
-            if(getByteOrder() != byteOrder) {
-                value = Long.reverseBytes(value);
-            }
             index += 8;
         }
         processPosition();
         unmap(oldPosition, index);
+        if(NATIVE_BYTE_ORDER != byteOrder) {
+            value = Long.reverseBytes(value);
+        }
         return value;
     }
 
@@ -1441,203 +1067,106 @@ implements BufferFacade, Cloneable
     public void putLong(long value, ByteOrder byteOrder)
     {
         long oldPosition = position;
+        if(NATIVE_BYTE_ORDER != byteOrder) {
+            value = Long.reverseBytes(value);
+        }
         int remaining = currentByteBuffer.remaining();
         if(remaining < 8) {
-            if (getByteOrder() == ByteOrder.BIG_ENDIAN) {
-                switch(remaining) {
-                    case 1:
-                        currentByteBuffer.put(ByteUtils.long7(value));
-                        position += 1;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.long6(value));
-                        currentByteBuffer.put(ByteUtils.long5(value));
-                        currentByteBuffer.put(ByteUtils.long4(value));
-                        currentByteBuffer.put(ByteUtils.long3(value));
-                        currentByteBuffer.put(ByteUtils.long2(value));
-                        currentByteBuffer.put(ByteUtils.long1(value));
-                        currentByteBuffer.put(ByteUtils.long0(value));
-                        position += 7;
-                        break;
-                    case 2:
-                        currentByteBuffer.put(ByteUtils.long7(value));
-                        currentByteBuffer.put(ByteUtils.long6(value));
-                        position += 2;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.long5(value));
-                        currentByteBuffer.put(ByteUtils.long4(value));
-                        currentByteBuffer.put(ByteUtils.long3(value));
-                        currentByteBuffer.put(ByteUtils.long2(value));
-                        currentByteBuffer.put(ByteUtils.long1(value));
-                        currentByteBuffer.put(ByteUtils.long0(value));
-                        position += 6;
-                        break;
-                    case 3:
-                        currentByteBuffer.put(ByteUtils.long7(value));
-                        currentByteBuffer.put(ByteUtils.long6(value));
-                        currentByteBuffer.put(ByteUtils.long5(value));
-                        position += 3;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.long4(value));
-                        currentByteBuffer.put(ByteUtils.long3(value));
-                        currentByteBuffer.put(ByteUtils.long2(value));
-                        currentByteBuffer.put(ByteUtils.long1(value));
-                        currentByteBuffer.put(ByteUtils.long0(value));
-                        position += 5;
-                        break;
-                    case 4:
-                        currentByteBuffer.put(ByteUtils.long7(value));
-                        currentByteBuffer.put(ByteUtils.long6(value));
-                        currentByteBuffer.put(ByteUtils.long5(value));
-                        currentByteBuffer.put(ByteUtils.long4(value));
-                        position += 4;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.long3(value));
-                        currentByteBuffer.put(ByteUtils.long2(value));
-                        currentByteBuffer.put(ByteUtils.long1(value));
-                        currentByteBuffer.put(ByteUtils.long0(value));
-                        position += 4;
-                        break;
-                    case 5:
-                        currentByteBuffer.put(ByteUtils.long7(value));
-                        currentByteBuffer.put(ByteUtils.long6(value));
-                        currentByteBuffer.put(ByteUtils.long5(value));
-                        currentByteBuffer.put(ByteUtils.long4(value));
-                        currentByteBuffer.put(ByteUtils.long3(value));
-                        position += 5;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.long2(value));
-                        currentByteBuffer.put(ByteUtils.long1(value));
-                        currentByteBuffer.put(ByteUtils.long0(value));
-                        position += 3;
-                        break;
-                    case 6:
-                        currentByteBuffer.put(ByteUtils.long7(value));
-                        currentByteBuffer.put(ByteUtils.long6(value));
-                        currentByteBuffer.put(ByteUtils.long5(value));
-                        currentByteBuffer.put(ByteUtils.long4(value));
-                        currentByteBuffer.put(ByteUtils.long3(value));
-                        currentByteBuffer.put(ByteUtils.long2(value));
-                        position += 6;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.long1(value));
-                        currentByteBuffer.put(ByteUtils.long0(value));
-                        position += 2;
-                        break;
-                    case 7:
-                        currentByteBuffer.put(ByteUtils.long7(value));
-                        currentByteBuffer.put(ByteUtils.long6(value));
-                        currentByteBuffer.put(ByteUtils.long5(value));
-                        currentByteBuffer.put(ByteUtils.long4(value));
-                        currentByteBuffer.put(ByteUtils.long3(value));
-                        currentByteBuffer.put(ByteUtils.long2(value));
-                        currentByteBuffer.put(ByteUtils.long1(value));
-                        position += 7;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.long0(value));
-                        position += 1;
-                        break;
-                }
-            }
-            else { //ByteOrder.LITTLE_ENDIAN
-                switch(remaining) {
-                    case 1:
-                        currentByteBuffer.put(ByteUtils.long0(value));
-                        position += 1;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.long1(value));
-                        currentByteBuffer.put(ByteUtils.long2(value));
-                        currentByteBuffer.put(ByteUtils.long3(value));
-                        currentByteBuffer.put(ByteUtils.long4(value));
-                        currentByteBuffer.put(ByteUtils.long5(value));
-                        currentByteBuffer.put(ByteUtils.long6(value));
-                        currentByteBuffer.put(ByteUtils.long7(value));
-                        position += 7;
-                        break;
-                    case 2:
-                        currentByteBuffer.put(ByteUtils.long0(value));
-                        currentByteBuffer.put(ByteUtils.long1(value));
-                        position += 2;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.long2(value));
-                        currentByteBuffer.put(ByteUtils.long3(value));
-                        currentByteBuffer.put(ByteUtils.long4(value));
-                        currentByteBuffer.put(ByteUtils.long5(value));
-                        currentByteBuffer.put(ByteUtils.long6(value));
-                        currentByteBuffer.put(ByteUtils.long7(value));
-                        position += 6;
-                        break;
-                    case 3:
-                        currentByteBuffer.put(ByteUtils.long0(value));
-                        currentByteBuffer.put(ByteUtils.long1(value));
-                        currentByteBuffer.put(ByteUtils.long2(value));
-                        position += 3;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.long3(value));
-                        currentByteBuffer.put(ByteUtils.long4(value));
-                        currentByteBuffer.put(ByteUtils.long5(value));
-                        currentByteBuffer.put(ByteUtils.long6(value));
-                        currentByteBuffer.put(ByteUtils.long7(value));
-                        position += 5;
-                        break;
-                    case 4:
-                        currentByteBuffer.put(ByteUtils.long0(value));
-                        currentByteBuffer.put(ByteUtils.long1(value));
-                        currentByteBuffer.put(ByteUtils.long2(value));
-                        currentByteBuffer.put(ByteUtils.long3(value));
-                        position += 4;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.long4(value));
-                        currentByteBuffer.put(ByteUtils.long5(value));
-                        currentByteBuffer.put(ByteUtils.long6(value));
-                        currentByteBuffer.put(ByteUtils.long7(value));
-                        position += 4;
-                        break;
-                    case 5:
-                        currentByteBuffer.put(ByteUtils.long0(value));
-                        currentByteBuffer.put(ByteUtils.long1(value));
-                        currentByteBuffer.put(ByteUtils.long2(value));
-                        currentByteBuffer.put(ByteUtils.long3(value));
-                        currentByteBuffer.put(ByteUtils.long4(value));
-                        position += 5;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.long5(value));
-                        currentByteBuffer.put(ByteUtils.long6(value));
-                        currentByteBuffer.put(ByteUtils.long7(value));
-                        position += 3;
-                        break;
-                    case 6:
-                        currentByteBuffer.put(ByteUtils.long0(value));
-                        currentByteBuffer.put(ByteUtils.long1(value));
-                        currentByteBuffer.put(ByteUtils.long2(value));
-                        currentByteBuffer.put(ByteUtils.long3(value));
-                        currentByteBuffer.put(ByteUtils.long4(value));
-                        currentByteBuffer.put(ByteUtils.long5(value));
-                        position += 6;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.long6(value));
-                        currentByteBuffer.put(ByteUtils.long7(value));
-                        position += 2;
-                        break;
-                    case 7:
-                        currentByteBuffer.put(ByteUtils.long0(value));
-                        currentByteBuffer.put(ByteUtils.long1(value));
-                        currentByteBuffer.put(ByteUtils.long2(value));
-                        currentByteBuffer.put(ByteUtils.long3(value));
-                        currentByteBuffer.put(ByteUtils.long4(value));
-                        currentByteBuffer.put(ByteUtils.long5(value));
-                        currentByteBuffer.put(ByteUtils.long6(value));
-                        position += 7;
-                        currentByteBuffer = buffer(position);
-                        currentByteBuffer.put(ByteUtils.long7(value));
-                        position += 1;
-                        break;
-                }
+            switch(remaining) {
+                case 1:
+                    currentByteBuffer.put(ByteUtils.long7(value));
+                    position += 1;
+                    currentByteBuffer = buffer(position);
+                    currentByteBuffer.put(ByteUtils.long6(value));
+                    currentByteBuffer.put(ByteUtils.long5(value));
+                    currentByteBuffer.put(ByteUtils.long4(value));
+                    currentByteBuffer.put(ByteUtils.long3(value));
+                    currentByteBuffer.put(ByteUtils.long2(value));
+                    currentByteBuffer.put(ByteUtils.long1(value));
+                    currentByteBuffer.put(ByteUtils.long0(value));
+                    position += 7;
+                    break;
+                case 2:
+                    currentByteBuffer.put(ByteUtils.long7(value));
+                    currentByteBuffer.put(ByteUtils.long6(value));
+                    position += 2;
+                    currentByteBuffer = buffer(position);
+                    currentByteBuffer.put(ByteUtils.long5(value));
+                    currentByteBuffer.put(ByteUtils.long4(value));
+                    currentByteBuffer.put(ByteUtils.long3(value));
+                    currentByteBuffer.put(ByteUtils.long2(value));
+                    currentByteBuffer.put(ByteUtils.long1(value));
+                    currentByteBuffer.put(ByteUtils.long0(value));
+                    position += 6;
+                    break;
+                case 3:
+                    currentByteBuffer.put(ByteUtils.long7(value));
+                    currentByteBuffer.put(ByteUtils.long6(value));
+                    currentByteBuffer.put(ByteUtils.long5(value));
+                    position += 3;
+                    currentByteBuffer = buffer(position);
+                    currentByteBuffer.put(ByteUtils.long4(value));
+                    currentByteBuffer.put(ByteUtils.long3(value));
+                    currentByteBuffer.put(ByteUtils.long2(value));
+                    currentByteBuffer.put(ByteUtils.long1(value));
+                    currentByteBuffer.put(ByteUtils.long0(value));
+                    position += 5;
+                    break;
+                case 4:
+                    currentByteBuffer.put(ByteUtils.long7(value));
+                    currentByteBuffer.put(ByteUtils.long6(value));
+                    currentByteBuffer.put(ByteUtils.long5(value));
+                    currentByteBuffer.put(ByteUtils.long4(value));
+                    position += 4;
+                    currentByteBuffer = buffer(position);
+                    currentByteBuffer.put(ByteUtils.long3(value));
+                    currentByteBuffer.put(ByteUtils.long2(value));
+                    currentByteBuffer.put(ByteUtils.long1(value));
+                    currentByteBuffer.put(ByteUtils.long0(value));
+                    position += 4;
+                    break;
+                case 5:
+                    currentByteBuffer.put(ByteUtils.long7(value));
+                    currentByteBuffer.put(ByteUtils.long6(value));
+                    currentByteBuffer.put(ByteUtils.long5(value));
+                    currentByteBuffer.put(ByteUtils.long4(value));
+                    currentByteBuffer.put(ByteUtils.long3(value));
+                    position += 5;
+                    currentByteBuffer = buffer(position);
+                    currentByteBuffer.put(ByteUtils.long2(value));
+                    currentByteBuffer.put(ByteUtils.long1(value));
+                    currentByteBuffer.put(ByteUtils.long0(value));
+                    position += 3;
+                    break;
+                case 6:
+                    currentByteBuffer.put(ByteUtils.long7(value));
+                    currentByteBuffer.put(ByteUtils.long6(value));
+                    currentByteBuffer.put(ByteUtils.long5(value));
+                    currentByteBuffer.put(ByteUtils.long4(value));
+                    currentByteBuffer.put(ByteUtils.long3(value));
+                    currentByteBuffer.put(ByteUtils.long2(value));
+                    position += 6;
+                    currentByteBuffer = buffer(position);
+                    currentByteBuffer.put(ByteUtils.long1(value));
+                    currentByteBuffer.put(ByteUtils.long0(value));
+                    position += 2;
+                    break;
+                case 7:
+                    currentByteBuffer.put(ByteUtils.long7(value));
+                    currentByteBuffer.put(ByteUtils.long6(value));
+                    currentByteBuffer.put(ByteUtils.long5(value));
+                    currentByteBuffer.put(ByteUtils.long4(value));
+                    currentByteBuffer.put(ByteUtils.long3(value));
+                    currentByteBuffer.put(ByteUtils.long2(value));
+                    currentByteBuffer.put(ByteUtils.long1(value));
+                    position += 7;
+                    currentByteBuffer = buffer(position);
+                    currentByteBuffer.put(ByteUtils.long0(value));
+                    position += 1;
+                    break;
             }
         }
         else {
-            if(getByteOrder() != byteOrder) {
-                value = Long.reverseBytes(value);
-            }
             currentByteBuffer.putLong(value);
             position += 8;
         }
@@ -1660,209 +1189,112 @@ implements BufferFacade, Cloneable
     public void putLong(long index, long value, ByteOrder byteOrder)
     {
         long oldPosition = index;
+        if(NATIVE_BYTE_ORDER != byteOrder) {
+            value = Long.reverseBytes(value);
+        }
         ByteBuffer buffer = buffer(index);
         int remaining = buffer.remaining();
         if(remaining < 8) {
-            if (getByteOrder() == ByteOrder.BIG_ENDIAN) {
-                switch(remaining) {
-                    case 1:
-                        buffer.put(ByteUtils.long7(value));
-                        index += 1;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.long6(value));
-                        buffer.put(ByteUtils.long5(value));
-                        buffer.put(ByteUtils.long4(value));
-                        buffer.put(ByteUtils.long3(value));
-                        buffer.put(ByteUtils.long2(value));
-                        buffer.put(ByteUtils.long1(value));
-                        buffer.put(ByteUtils.long0(value));
-                        index += 7;
-                        break;
-                    case 2:
-                        buffer.put(ByteUtils.long7(value));
-                        buffer.put(ByteUtils.long6(value));
-                        index += 2;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.long5(value));
-                        buffer.put(ByteUtils.long4(value));
-                        buffer.put(ByteUtils.long3(value));
-                        buffer.put(ByteUtils.long2(value));
-                        buffer.put(ByteUtils.long1(value));
-                        buffer.put(ByteUtils.long0(value));
-                        index += 6;
-                        break;
-                    case 3:
-                        buffer.put(ByteUtils.long7(value));
-                        buffer.put(ByteUtils.long6(value));
-                        buffer.put(ByteUtils.long5(value));
-                        index += 3;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.long4(value));
-                        buffer.put(ByteUtils.long3(value));
-                        buffer.put(ByteUtils.long2(value));
-                        buffer.put(ByteUtils.long1(value));
-                        buffer.put(ByteUtils.long0(value));
-                        index += 5;
-                        break;
-                    case 4:
-                        buffer.put(ByteUtils.long7(value));
-                        buffer.put(ByteUtils.long6(value));
-                        buffer.put(ByteUtils.long5(value));
-                        buffer.put(ByteUtils.long4(value));
-                        index += 4;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.long3(value));
-                        buffer.put(ByteUtils.long2(value));
-                        buffer.put(ByteUtils.long1(value));
-                        buffer.put(ByteUtils.long0(value));
-                        index += 4;
-                        break;
-                    case 5:
-                        buffer.put(ByteUtils.long7(value));
-                        buffer.put(ByteUtils.long6(value));
-                        buffer.put(ByteUtils.long5(value));
-                        buffer.put(ByteUtils.long4(value));
-                        buffer.put(ByteUtils.long3(value));
-                        index += 5;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.long2(value));
-                        buffer.put(ByteUtils.long1(value));
-                        buffer.put(ByteUtils.long0(value));
-                        index += 3;
-                        break;
-                    case 6:
-                        buffer.put(ByteUtils.long7(value));
-                        buffer.put(ByteUtils.long6(value));
-                        buffer.put(ByteUtils.long5(value));
-                        buffer.put(ByteUtils.long4(value));
-                        buffer.put(ByteUtils.long3(value));
-                        buffer.put(ByteUtils.long2(value));
-                        index += 6;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.long1(value));
-                        buffer.put(ByteUtils.long0(value));
-                        index += 2;
-                        break;
-                    case 7:
-                        buffer.put(ByteUtils.long7(value));
-                        buffer.put(ByteUtils.long6(value));
-                        buffer.put(ByteUtils.long5(value));
-                        buffer.put(ByteUtils.long4(value));
-                        buffer.put(ByteUtils.long3(value));
-                        buffer.put(ByteUtils.long2(value));
-                        buffer.put(ByteUtils.long1(value));
-                        index += 7;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.long0(value));
-                        index += 1;
-                        break;
-                }
-            }
-            else { //ByteOrder.LITTLE_ENDIAN
-                switch(remaining) {
-                    case 1:
-                        buffer.put(ByteUtils.long0(value));
-                        index += 1;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.long1(value));
-                        buffer.put(ByteUtils.long2(value));
-                        buffer.put(ByteUtils.long3(value));
-                        buffer.put(ByteUtils.long4(value));
-                        buffer.put(ByteUtils.long5(value));
-                        buffer.put(ByteUtils.long6(value));
-                        buffer.put(ByteUtils.long7(value));
-                        index += 7;
-                        break;
-                    case 2:
-                        buffer.put(ByteUtils.long0(value));
-                        buffer.put(ByteUtils.long1(value));
-                        index += 2;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.long2(value));
-                        buffer.put(ByteUtils.long3(value));
-                        buffer.put(ByteUtils.long4(value));
-                        buffer.put(ByteUtils.long5(value));
-                        buffer.put(ByteUtils.long6(value));
-                        buffer.put(ByteUtils.long7(value));
-                        index += 6;
-                        break;
-                    case 3:
-                        buffer.put(ByteUtils.long0(value));
-                        buffer.put(ByteUtils.long1(value));
-                        buffer.put(ByteUtils.long2(value));
-                        index += 3;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.long3(value));
-                        buffer.put(ByteUtils.long4(value));
-                        buffer.put(ByteUtils.long5(value));
-                        buffer.put(ByteUtils.long6(value));
-                        buffer.put(ByteUtils.long7(value));
-                        index += 5;
-                        break;
-                    case 4:
-                        buffer.put(ByteUtils.long0(value));
-                        buffer.put(ByteUtils.long1(value));
-                        buffer.put(ByteUtils.long2(value));
-                        buffer.put(ByteUtils.long3(value));
-                        index += 4;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.long4(value));
-                        buffer.put(ByteUtils.long5(value));
-                        buffer.put(ByteUtils.long6(value));
-                        buffer.put(ByteUtils.long7(value));
-                        index += 4;
-                        break;
-                    case 5:
-                        buffer.put(ByteUtils.long0(value));
-                        buffer.put(ByteUtils.long1(value));
-                        buffer.put(ByteUtils.long2(value));
-                        buffer.put(ByteUtils.long3(value));
-                        buffer.put(ByteUtils.long4(value));
-                        index += 5;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.long5(value));
-                        buffer.put(ByteUtils.long6(value));
-                        buffer.put(ByteUtils.long7(value));
-                        index += 3;
-                        break;
-                    case 6:
-                        buffer.put(ByteUtils.long0(value));
-                        buffer.put(ByteUtils.long1(value));
-                        buffer.put(ByteUtils.long2(value));
-                        buffer.put(ByteUtils.long3(value));
-                        buffer.put(ByteUtils.long4(value));
-                        buffer.put(ByteUtils.long5(value));
-                        index += 6;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.long6(value));
-                        buffer.put(ByteUtils.long7(value));
-                        index += 2;
-                        break;
-                    case 7:
-                        buffer.put(ByteUtils.long0(value));
-                        buffer.put(ByteUtils.long1(value));
-                        buffer.put(ByteUtils.long2(value));
-                        buffer.put(ByteUtils.long3(value));
-                        buffer.put(ByteUtils.long4(value));
-                        buffer.put(ByteUtils.long5(value));
-                        buffer.put(ByteUtils.long6(value));
-                        index += 7;
-                        buffer = buffer(index);
-                        buffer.put(ByteUtils.long7(value));
-                        index += 1;
-                        break;
-                }
+            switch(remaining) {
+                case 1:
+                    buffer.put(ByteUtils.long7(value));
+                    index += 1;
+                    buffer = buffer(index);
+                    buffer.put(ByteUtils.long6(value));
+                    buffer.put(ByteUtils.long5(value));
+                    buffer.put(ByteUtils.long4(value));
+                    buffer.put(ByteUtils.long3(value));
+                    buffer.put(ByteUtils.long2(value));
+                    buffer.put(ByteUtils.long1(value));
+                    buffer.put(ByteUtils.long0(value));
+                    index += 7;
+                    break;
+                case 2:
+                    buffer.put(ByteUtils.long7(value));
+                    buffer.put(ByteUtils.long6(value));
+                    index += 2;
+                    buffer = buffer(index);
+                    buffer.put(ByteUtils.long5(value));
+                    buffer.put(ByteUtils.long4(value));
+                    buffer.put(ByteUtils.long3(value));
+                    buffer.put(ByteUtils.long2(value));
+                    buffer.put(ByteUtils.long1(value));
+                    buffer.put(ByteUtils.long0(value));
+                    index += 6;
+                    break;
+                case 3:
+                    buffer.put(ByteUtils.long7(value));
+                    buffer.put(ByteUtils.long6(value));
+                    buffer.put(ByteUtils.long5(value));
+                    index += 3;
+                    buffer = buffer(index);
+                    buffer.put(ByteUtils.long4(value));
+                    buffer.put(ByteUtils.long3(value));
+                    buffer.put(ByteUtils.long2(value));
+                    buffer.put(ByteUtils.long1(value));
+                    buffer.put(ByteUtils.long0(value));
+                    index += 5;
+                    break;
+                case 4:
+                    buffer.put(ByteUtils.long7(value));
+                    buffer.put(ByteUtils.long6(value));
+                    buffer.put(ByteUtils.long5(value));
+                    buffer.put(ByteUtils.long4(value));
+                    index += 4;
+                    buffer = buffer(index);
+                    buffer.put(ByteUtils.long3(value));
+                    buffer.put(ByteUtils.long2(value));
+                    buffer.put(ByteUtils.long1(value));
+                    buffer.put(ByteUtils.long0(value));
+                    index += 4;
+                    break;
+                case 5:
+                    buffer.put(ByteUtils.long7(value));
+                    buffer.put(ByteUtils.long6(value));
+                    buffer.put(ByteUtils.long5(value));
+                    buffer.put(ByteUtils.long4(value));
+                    buffer.put(ByteUtils.long3(value));
+                    index += 5;
+                    buffer = buffer(index);
+                    buffer.put(ByteUtils.long2(value));
+                    buffer.put(ByteUtils.long1(value));
+                    buffer.put(ByteUtils.long0(value));
+                    index += 3;
+                    break;
+                case 6:
+                    buffer.put(ByteUtils.long7(value));
+                    buffer.put(ByteUtils.long6(value));
+                    buffer.put(ByteUtils.long5(value));
+                    buffer.put(ByteUtils.long4(value));
+                    buffer.put(ByteUtils.long3(value));
+                    buffer.put(ByteUtils.long2(value));
+                    index += 6;
+                    buffer = buffer(index);
+                    buffer.put(ByteUtils.long1(value));
+                    buffer.put(ByteUtils.long0(value));
+                    index += 2;
+                    break;
+                case 7:
+                    buffer.put(ByteUtils.long7(value));
+                    buffer.put(ByteUtils.long6(value));
+                    buffer.put(ByteUtils.long5(value));
+                    buffer.put(ByteUtils.long4(value));
+                    buffer.put(ByteUtils.long3(value));
+                    buffer.put(ByteUtils.long2(value));
+                    buffer.put(ByteUtils.long1(value));
+                    index += 7;
+                    buffer = buffer(index);
+                    buffer.put(ByteUtils.long0(value));
+                    index += 1;
+                    break;
             }
         }
         else {
-            if(getByteOrder() != byteOrder) {
-                value = Long.reverseBytes(value);
-            }
             buffer.putLong(value);
             index += 8;
         }
         processPosition();
-        unmap(oldPosition, position);
+        unmap(oldPosition, index);
     }
 
     /* ----------------------------------------------------------------------------------------------------------------------------- */
@@ -2058,8 +1490,6 @@ implements BufferFacade, Cloneable
         {
             ByteBuffer buf = buffer(index);
             int count = Math.min(len, buf.remaining());
-//            buf.put(destination);
-//            destination.put(buf);
             for(int i=0; i< count; i++) {
                 destination.put(buf.get());
             }
@@ -2226,21 +1656,22 @@ implements BufferFacade, Cloneable
         MappedByteBuffer buf = _buffers[bufferIndex];
         buf.position(newCurrentPosition);
         assert (buf.remaining() != 0);
+        assert(buf.order() == ByteOrder.nativeOrder());
         return buf;
     }
 
     private void unmap(long oldPosition, long newPosition) {
-        int oldIndex = getBuffersIndex(oldPosition);
-        int newIndex = getBuffersIndex(newPosition);
-        for(int i=oldIndex; i<newIndex; i++) {
-            unmap(_buffers[i]);
-        }
+//        int oldIndex = getBuffersIndex(oldPosition);
+//        int newIndex = getBuffersIndex(newPosition);
+//        for(int i=oldIndex; i<newIndex; i++) {
+//            unmap(_buffers[i]);
+//        }
     }
 
     private static void unmap(MappedByteBuffer bb) {
         Cleaner cl = ((DirectBuffer) bb).cleaner();
         if (cl != null) {
-//            cl.clean();
+            cl.clean();
         }
     }
 }

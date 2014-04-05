@@ -54,7 +54,7 @@ public class BinaryFile
         path = Paths.get(filePath);
         file = path.toFile();
         mappedFile = new MappedFileBuffer(file, this.blockSize, this.initialFileSize, this.growBySize, true, false);
-        mappedFile.setByteOrder(byteOrder);
+//        mappedFile.setByteOrder(byteOrder);
         this.nextMessageLength = getNextMessageLength();
     }
 
@@ -108,10 +108,10 @@ public class BinaryFile
         return messageLength;
     }
 
-    private int getDirectBufferIndex(long position) {
-        int directBufferIndex = (int)(position % blockSize);
-        return directBufferIndex;
-    }
+//    private int getDirectBufferIndex(long position) {
+//        int directBufferIndex = (int)(position % blockSize);
+//        return directBufferIndex;
+//    }
 
     public void reset() throws IOException {
         currentFilePosition = 0;
