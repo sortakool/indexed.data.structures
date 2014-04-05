@@ -18,6 +18,8 @@ import com.rsm.byteSlice.ByteArraySlice;
 import com.rsm.util.ByteUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import sun.misc.Cleaner;
+import sun.nio.ch.DirectBuffer;
 
 import java.io.File;
 import java.io.IOException;
@@ -367,23 +369,30 @@ implements BufferFacade, Cloneable
     @Override
     public byte get()
     {
+        long oldPosition = position;
         byte value = currentByteBuffer.get();
         position += 1;
         processPosition();
+        unmap(oldPosition, position);
         return value;
     }
 
     public byte get(long index) {
+        long oldPosition = index;
         final byte value = buffer(index).get();
+        index += 1;
         processPosition();
+        unmap(oldPosition, index);
         return value;
     }
 
     @Override
     public void put(byte value) {
+        long oldPosition = position;
         currentByteBuffer.put(value);
         position += 1;
         processPosition();
+        unmap(oldPosition, position);
     }
 
     /**
@@ -391,8 +400,10 @@ implements BufferFacade, Cloneable
      */
     public void put(long index, byte value)
     {
+        long oldPosition = index;
         buffer(index).put(value);
         processPosition();
+        unmap(oldPosition, index);
     }
 
     /* ----------------------------------------------------------------------------------------------------------------------------- */
@@ -412,6 +423,7 @@ implements BufferFacade, Cloneable
      * @return
      */
     public short getShort(ByteOrder byteOrder) {
+        long oldPosition = position;
         short value = 0;
         final int remaining = currentByteBuffer.remaining();
         if (remaining < 2) {
@@ -448,6 +460,7 @@ implements BufferFacade, Cloneable
             position += 2;
         }
         processPosition();
+        unmap(oldPosition, position);
         return value;
     }
 
@@ -456,6 +469,7 @@ implements BufferFacade, Cloneable
      * @return
      */
     public short getShort(long index, ByteOrder byteOrder) {
+        long oldPosition = index;
         short value = 0;
         MappedByteBuffer buffer = buffer(index);
         final int remaining = buffer.remaining();
@@ -491,8 +505,10 @@ implements BufferFacade, Cloneable
             if(getByteOrder() != byteOrder) {
                 value = Short.reverseBytes(value);
             }
+            index += 2;
         }
         processPosition();
+        unmap(oldPosition, index);
         return value;
     }
 
@@ -509,6 +525,7 @@ implements BufferFacade, Cloneable
      */
     public void putShort(long index, short value, ByteOrder byteOrder)
     {
+        long oldPosition = index;
         final MappedByteBuffer buffer = buffer(index);
         int remaining = buffer.remaining();
         if(remaining < 2) {
@@ -538,8 +555,10 @@ implements BufferFacade, Cloneable
                 value = Short.reverseBytes(value);
             }
             buffer(index).putShort(value);
+            index += 2;
         }
         processPosition();
+        unmap(oldPosition, index);
     }
 
     /**
@@ -555,6 +574,7 @@ implements BufferFacade, Cloneable
      */
     public void putShort(short value, ByteOrder byteOrder)
     {
+        long oldPosition = position;
         int remaining = currentByteBuffer.remaining();
         if(remaining < 2) {
             if (getByteOrder() == ByteOrder.BIG_ENDIAN) {
@@ -588,6 +608,7 @@ implements BufferFacade, Cloneable
             position += 2;
         }
         processPosition();
+        unmap(oldPosition, position);
     }
 
     /* ----------------------------------------------------------------------------------------------------------------------------- */
@@ -608,6 +629,7 @@ implements BufferFacade, Cloneable
      * @return
      */
     public int getInt(ByteOrder byteOrder) {
+        long oldPosition = position;
         int value = 0;
         int remaining = currentByteBuffer.remaining();
         if(remaining < 4) {
@@ -687,6 +709,7 @@ implements BufferFacade, Cloneable
             position += 4;
         }
         processPosition();
+        unmap(oldPosition, position);
         return value;
     }
 
@@ -699,6 +722,7 @@ implements BufferFacade, Cloneable
      */
     public int getInt(long index, ByteOrder byteOrder)
     {
+        long oldPosition = index;
         int value = 0;
         MappedByteBuffer buffer = buffer(index);
         int remaining = buffer.remaining();
@@ -776,8 +800,10 @@ implements BufferFacade, Cloneable
             if(getByteOrder() != byteOrder) {
                 value = Integer.reverseBytes(value);
             }
+            index += 4;
         }
         processPosition();
+        unmap(oldPosition, index);
         return value;
     }
 
@@ -787,6 +813,7 @@ implements BufferFacade, Cloneable
     }
 
     public void putInt(int value, ByteOrder byteOrder) {
+        long oldPosition = position;
         int remaining = currentByteBuffer.remaining();
         if(remaining < 4) {
             if (getByteOrder() == ByteOrder.BIG_ENDIAN) {
@@ -860,6 +887,7 @@ implements BufferFacade, Cloneable
             position += 4;
         }
         processPosition();
+        unmap(oldPosition, position);
     }
 
     /**
@@ -874,6 +902,7 @@ implements BufferFacade, Cloneable
      */
     public void putInt(long index, int value, ByteOrder byteOrder)
     {
+        long oldPosition = index;
         ByteBuffer buffer = buffer(index);
         int remaining = buffer.remaining();
         if(remaining < 4) {
@@ -945,8 +974,10 @@ implements BufferFacade, Cloneable
                 value = Integer.reverseBytes(value);
             }
             buffer.putInt(value);
+            index += 4;
         }
         processPosition();
+        unmap(oldPosition, index);
     }
 
     /* ----------------------------------------------------------------------------------------------------------------------------- */
@@ -958,6 +989,7 @@ implements BufferFacade, Cloneable
     }
 
     public long  getLong(ByteOrder byteOrder) {
+        long oldPosition = position;
         long value = 0;
         int remaining = currentByteBuffer.remaining();
         if(remaining < 8) {
@@ -1166,8 +1198,10 @@ implements BufferFacade, Cloneable
             if(getByteOrder() != byteOrder) {
                 value = Long.reverseBytes(value);
             }
+            position += 8;
         }
         processPosition();
+        unmap(oldPosition, position);
         return value;
     }
 
@@ -1180,6 +1214,7 @@ implements BufferFacade, Cloneable
     }
 
     public long  getLong(long index, ByteOrder byteOrder) {
+        long oldPosition = index;
         long value = 0;
         MappedByteBuffer buffer = buffer(index);
         int remaining = buffer.remaining();
@@ -1389,8 +1424,10 @@ implements BufferFacade, Cloneable
             if(getByteOrder() != byteOrder) {
                 value = Long.reverseBytes(value);
             }
+            index += 8;
         }
         processPosition();
+        unmap(oldPosition, index);
         return value;
     }
 
@@ -1403,6 +1440,7 @@ implements BufferFacade, Cloneable
      */
     public void putLong(long value, ByteOrder byteOrder)
     {
+        long oldPosition = position;
         int remaining = currentByteBuffer.remaining();
         if(remaining < 8) {
             if (getByteOrder() == ByteOrder.BIG_ENDIAN) {
@@ -1604,6 +1642,7 @@ implements BufferFacade, Cloneable
             position += 8;
         }
         processPosition();
+        unmap(oldPosition, position);
     }
 
 
@@ -1620,6 +1659,7 @@ implements BufferFacade, Cloneable
      */
     public void putLong(long index, long value, ByteOrder byteOrder)
     {
+        long oldPosition = index;
         ByteBuffer buffer = buffer(index);
         int remaining = buffer.remaining();
         if(remaining < 8) {
@@ -1819,8 +1859,10 @@ implements BufferFacade, Cloneable
                 value = Long.reverseBytes(value);
             }
             buffer.putLong(value);
+            index += 8;
         }
         processPosition();
+        unmap(oldPosition, position);
     }
 
     /* ----------------------------------------------------------------------------------------------------------------------------- */
@@ -2011,6 +2053,7 @@ implements BufferFacade, Cloneable
      */
     public ByteBuffer getBytes(long index, ByteBuffer destination, int len)
     {
+        long initialPosition = index;
         while (len > 0)
         {
             ByteBuffer buf = buffer(index);
@@ -2024,6 +2067,7 @@ implements BufferFacade, Cloneable
             len -= count;
         }
         processPosition();
+        unmap(initialPosition, index);
         return destination;
     }
 
@@ -2183,5 +2227,20 @@ implements BufferFacade, Cloneable
         buf.position(newCurrentPosition);
         assert (buf.remaining() != 0);
         return buf;
+    }
+
+    private void unmap(long oldPosition, long newPosition) {
+        int oldIndex = getBuffersIndex(oldPosition);
+        int newIndex = getBuffersIndex(newPosition);
+        for(int i=oldIndex; i<newIndex; i++) {
+            unmap(_buffers[i]);
+        }
+    }
+
+    private static void unmap(MappedByteBuffer bb) {
+        Cleaner cl = ((DirectBuffer) bb).cleaner();
+        if (cl != null) {
+//            cl.clean();
+        }
     }
 }
