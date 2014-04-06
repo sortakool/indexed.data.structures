@@ -14,7 +14,6 @@
 
 package com.rsm.buffer;
 
-import com.rsm.byteSlice.ByteArraySlice;
 import com.rsm.util.ByteUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -29,8 +28,6 @@ import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileChannel.MapMode;
-import java.util.Arrays;
-
 
 /**
  *  A wrapper for memory-mapped files that generally preserves the semantics of
@@ -268,7 +265,7 @@ implements BufferFacade, Cloneable
                             Thread.sleep(1);
                         }
                         catch(InterruptedException ignored) {
-                            Thread.currentThread().interrupt();;
+                            Thread.currentThread().interrupt();
                             throw e;
                         }
                     }
@@ -460,7 +457,7 @@ implements BufferFacade, Cloneable
      */
     public short getShort(long index, ByteOrder byteOrder) {
         long oldPosition = index;
-        short value = 0;
+        short value;
         MappedByteBuffer buffer = buffer(index);
         final int remaining = buffer.remaining();
         if (remaining < 2) {
