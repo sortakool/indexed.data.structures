@@ -1,9 +1,14 @@
 package com.rsm.servers;
 
+import com.rsm.message.nasdaq.itch.v4_1.ReplayRequest;
+import com.rsm.message.nasdaq.moldudp.MoldUDPUtil;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import uk.co.real_logic.sbe.codec.java.DirectBuffer;
 
 import java.net.*;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.*;
 import java.util.Enumeration;
 import java.util.Iterator;
@@ -21,12 +26,29 @@ public class Rewind {
     public static final String TCP_REWIND_IP = "FF02:0:0:0:0:0:0:5";
     public static final int TCP_REWIND_PORT = 9002;
 
-    private ServerSocketChannel tcpSocketChannel;
+    private ServerSocketChannel replayChannel;
     private DatagramChannel eventChannel;
+    int eventPosition = 0;
+
+    ByteBuffer eventByteBuffer;
+    DirectBuffer eventDirectBuffer;
+
+    ByteBuffer replayByteBuffer;
+    DirectBuffer replayDirectBuffer;
 
     MembershipKey eventMembershipKey;
 
+    ReplayRequest replayRequest;
+
     public Rewind() throws Exception {
+        eventByteBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE*2);
+        eventByteBuffer.order(ByteOrder.BIG_ENDIAN);
+        eventDirectBuffer = new DirectBuffer(eventByteBuffer);
+
+        replayByteBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE*2);
+        replayByteBuffer.order(ByteOrder.BIG_ENDIAN);
+        replayDirectBuffer = new DirectBuffer(replayByteBuffer);
+
         Selector selector = Selector.open();
 
         NetworkInterface networkInterface = getNetworkInterface();
@@ -46,14 +68,14 @@ public class Rewind {
 
 
         //create TCP connection
-        tcpSocketChannel = ServerSocketChannel.open();
-        tcpSocketChannel.setOption(StandardSocketOptions.SO_REUSEADDR, false);
+        replayChannel = ServerSocketChannel.open();
+        replayChannel.setOption(StandardSocketOptions.SO_REUSEADDR, false);
         InetSocketAddress inetSocketAddress = new InetSocketAddress(TCP_REWIND_IP, TCP_REWIND_PORT);
-        tcpSocketChannel.bind(null);
-        tcpSocketChannel.configureBlocking(false);
+        replayChannel.bind(null);
+        replayChannel.configureBlocking(false);
 
-        //we only care right now that we are ready to connect
-        final SelectionKey tcpRequestSelectionKey = tcpSocketChannel.register(selector, 0);
+        //we do not care about this until we have read in some events
+        final SelectionKey replaySelectionKey = replayChannel.register(selector, 0);
 
         boolean active = true;
         while(active) {
@@ -65,14 +87,40 @@ public class Rewind {
                     SelectionKey selectionKey = iter.next();
                     iter.remove();
 
-                    if (tcpRequestSelectionKey.isConnectable()) {
+                    if (replaySelectionKey.isAcceptable()) {
                         //we have been connected to and need to read in the request from
                         //the client requesting a rewind
+
+                        ServerSocketChannel ch = (ServerSocketChannel) readableSelectionKey.channel();
+
+                        SocketChannel socketChannel = ch.accept();
+                        if(socketChannel != null) {
+                            socketChannel.read(replayByteBuffer);
+                            replayByteBuffer.flip();
+                            int replayPosition = replayByteBuffer.position();
+
+                            replayRequest.wrapForDecode(replayDirectBuffer, replayPosition, ReplayRequest.BLOCK_LENGTH, ReplayRequest.SCHEMA_VERSION);
+
+                            log.debug("Requesting " + replayRequest.messageCount() + "messages starting at " + replayRequest.sequenceNumber());
+
+                        }
+
                     } else if (readableSelectionKey.isReadable()) {
                         //we got a message and should save it to our binary file
                         log.info("got something");
+                        DatagramChannel ch = (DatagramChannel)selectionKey.channel();
+                        SocketAddress readableSocketAddress = ch.receive(eventByteBuffer);
 
+                        if (readableSocketAddress != null) {
+                            eventByteBuffer.flip();
 
+                            if(eventByteBuffer.hasRemaining()) {
+                                //put the event in the file
+                            }
+                        }
+
+                        //we are now ready to accept connections on tcp replay line
+                        replaySelectionKey.interestOps(SelectionKey.OP_ACCEPT);
                     }
                 }
             }
