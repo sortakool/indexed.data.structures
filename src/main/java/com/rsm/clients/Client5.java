@@ -83,6 +83,8 @@ public class Client5 {
     private int cancelledKeys;
     private boolean needsToSelectAgain;
 
+    private int messageCount = 0;
+
     public Client5() throws Exception {
         source = ByteUtils.getLongBigEndian(sourceString.getBytes(), 0);
         ByteUtils.fillWithSpaces(commandSourceBytes);
@@ -353,8 +355,6 @@ public class Client5 {
 
                             commandByteBuffer.clear();
                             commandPosition = commandByteBuffer.position();
-//                            eventChannel.register(selector, SelectionKey.OP_READ);
-//                            eventSelectionKey.interestOps(SelectionKey.OP_READ);
                         }
                     }
                 }

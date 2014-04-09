@@ -264,9 +264,6 @@ public class Sequencer2 {
                                     log.info(sb.toString());
                                 }
                                 if(!commandByteBuffer.hasRemaining()) {
-//                                selectionKey.cancel();
-//                                commandChannel.register(selector, 0);
-//                                    readableSelectionKey.interestOps(0);
                                     commandByteBuffer.clear();
                                     commandPosition = commandByteBuffer.position();
 //                                eventChannel.register(selector, SelectionKey.OP_WRITE);
@@ -297,8 +294,6 @@ public class Sequencer2 {
                                 log.info(sb.toString());
                             }
                             if(!eventByteBuffer.hasRemaining()){
-//                            selectionKey.cancel();
-//                            eventChannel.register(selector, 0);
                               writableSelectionKey.interestOps(0);
                               eventByteBuffer.clear();
                               eventPosition = eventByteBuffer.position();
