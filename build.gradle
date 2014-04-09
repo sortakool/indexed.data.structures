@@ -43,7 +43,7 @@ dependencies {
     compile 'net.openhft:affinity:2.0.1'
     compile 'net.openhft:chronicle:2.0.3'
 
-    generatedCompile 'uk.co.real_logic:sbe:0.1-SNAPSHOT'
+    compile 'uk.co.real_logic:sbe:0.1-SNAPSHOT'
 
 
     //make compile depend on sbe
