@@ -135,13 +135,14 @@ public class IndexedBinaryFile {
         assert( indexMappedFile.getLong(indexedMappedFilePosition, byteOrder) == (sequence+1));
         final long dataMappedFilePosition = dataMappedFile.position();
         final int payloadLength = payload.remaining();
+        assert (messageLength == payloadLength) : "Mismatch:[sequence="+sequence+"][messageLength="+messageLength+"][payloadLength="+payloadLength+"]";
         long payloadPosition = dataMappedFilePosition + payloadLength + BitUtil.SIZE_OF_SHORT;
         indexMappedFile.putLong(payloadPosition, byteOrder);
 //        indexMappedFile.force();
         assert( indexMappedFile.getLong(indexedMappedFilePosition + BitUtil.SIZE_OF_LONG, byteOrder) == payloadPosition);
 
         //dataFile
-        dataMappedFile.putShort((short) payloadLength, byteOrder);
+        dataMappedFile.putShort((short) messageLength, byteOrder);
 //        dataMappedFile.force();
         assert(dataMappedFile.position() == (dataMappedFilePosition+BitUtil.SIZE_OF_SHORT) );
         assert( dataMappedFile.getShort(dataMappedFilePosition, byteOrder) == payloadLength);
@@ -195,6 +196,14 @@ public class IndexedBinaryFile {
     public void force() {
         indexMappedFile.force();
         dataMappedFile.force();
+    }
+
+    public long getDataMappedFilePosition() {
+        return dataMappedFile.position();
+    }
+
+    public long getIndexedMappedFilePosition() {
+        return indexMappedFile.position();
     }
 
     public static void main(String[] args) throws Exception {

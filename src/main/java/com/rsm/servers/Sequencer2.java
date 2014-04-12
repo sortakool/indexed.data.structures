@@ -1,5 +1,6 @@
 package com.rsm.servers;
 
+import com.rsm.buffer.MappedFileBuffer;
 import com.rsm.io.selector.SelectedSelectionKeySet;
 import com.rsm.io.selector.SelectorUtil;
 import com.rsm.message.nasdaq.SequenceUtility;
@@ -40,7 +41,7 @@ public class Sequencer2 {
     public static final String EVENT_MULTICAST_IP = "FF02:0:0:0:0:0:0:4";
     public static final int EVENT_MULTICAST_PORT = 9001;
 
-    private final int logModCount = 500_000;
+    private final int logModCount = 1_000_000;
 
     DatagramChannel commandChannel = null;
     MembershipKey commandMembershipKey = null;
@@ -79,6 +80,11 @@ public class Sequencer2 {
     private volatile int ioRatio = 50;
     private int cancelledKeys;
     private boolean needsToSelectAgain;
+
+    private long currentEventSequence = 1;
+
+    private long totalBytesSent = 0;
+    private long totalBytesReceived = 0;
 
     public Sequencer2(SequencerConfig sequencerConfig) throws Exception {
         ByteUtils.fillWithSpaces(commandSourceBytes);
@@ -160,6 +166,8 @@ public class Sequencer2 {
                         if (readableSocketAddress != null) {
                             commandByteBuffer.flip();
                             if(commandByteBuffer.hasRemaining()) {
+                                int bytesReceived = commandByteBuffer.remaining();
+                                totalBytesReceived += bytesReceived;
 
                                 //read MoldUDP64 Packet
                                 int commandPosition = commandByteBuffer.position();
@@ -172,106 +180,130 @@ public class Sequencer2 {
                                     //there is a major bug if this ever happens
                                     sb.setLength(0);
                                     sb.append("[expectedSourceSequence").append(sequenceUtility.getSequence(sourceSequenceIndex)).append("]")
-                                            .append("[sourceSequence").append(sourceSequence).append("]")
+                                      .append("[sourceSequence").append(sourceSequence).append("]")
                                     ;
                                     log.error(sb.toString());
                                 }
                                 int messageCount = commandMoldUDP64Packet.downstreamPacketHeader().messageCount();
-                                sequenceUtility.adjustSequence(sourceSequenceIndex, messageCount);
-                                int moldUDP64PacketLength = commandMoldUDP64Packet.size();
-                                commandPosition += moldUDP64PacketLength;
-                                commandByteBuffer.position(commandPosition);
 
                                 long eventSequence = sequenceUtility.getSequence(eventSequenceIndex);
+                                currentEventSequence = eventSequence;
+
                                 eventMoldUDP64Packet.wrapForEncode(eventDirectBuffer, eventPosition);//, EventMoldUDP64Packet.BLOCK_LENGTH, EventMoldUDP64Packet.SCHEMA_VERSION);
                                 eventMoldUDP64Packet.eventSequence(eventSequence);
                                 eventMoldUDP64Packet.downstreamPacketHeader().putSession(sessionBytes, 0);
                                 eventMoldUDP64Packet.downstreamPacketHeader().sourceSequence(sourceSequence);
-                                eventMoldUDP64Packet.downstreamPacketHeader().messageCount(1);
+                                eventMoldUDP64Packet.downstreamPacketHeader().messageCount(messageCount);
                                 eventPosition +=  eventMoldUDP64Packet.size();
 
 
-                                //downstream packet message block
-                                short messageLength = commandDirectBuffer.getShort(commandPosition, ByteOrder.BIG_ENDIAN);
-                                commandPosition += 2;
+                                final long startingSourceSequence = sequenceUtility.getSequence(sourceSequenceIndex);
+                                long currentCommandSequence = startingSourceSequence;
+
+                                int moldUDP64PacketLength = commandMoldUDP64Packet.size();
+                                commandPosition += moldUDP64PacketLength;
                                 commandByteBuffer.position(commandPosition);
 
-                                eventDirectBuffer.putShort(eventPosition, messageLength, ByteOrder.BIG_ENDIAN);
-                                eventPosition += 2;
+                                //now each individual message
+                                for(int j=0; j<messageCount;j++) {
+                                    //downstream packet message block
+                                    short messageLength = commandDirectBuffer.getShort(commandPosition, ByteOrder.BIG_ENDIAN);
+                                    commandPosition += 2;
+                                    commandByteBuffer.position(commandPosition);
 
-                                //streamHeader
-                                int streamHeaderPosition = commandPosition;
-                                commandStreamHeader.wrap(commandDirectBuffer, commandPosition, streamHeaderVersion);
-                                long timestampNanos = commandStreamHeader.timestampNanos();
-                                byte major = commandStreamHeader.major();
-                                byte minor = commandStreamHeader.minor();
-                                long source = commandStreamHeader.source();
-                                long id = commandStreamHeader.id();
-                                long ref = commandStreamHeader.ref();
-                                int streamHeaderSize = commandStreamHeader.size();
-                                commandPosition += streamHeaderSize;
-                                commandByteBuffer.position((int)commandPosition);
+                                    eventDirectBuffer.putShort(eventPosition, messageLength, ByteOrder.BIG_ENDIAN);
+                                    eventPosition += 2;
 
-                                ByteUtils.fillWithSpaces(eventSourceBytes);
-                                ByteUtils.putLongBigEndian(eventSourceBytes, 0, source);
+                                    //streamHeader
+                                    int streamHeaderPosition = commandPosition;
+                                    commandStreamHeader.wrap(commandDirectBuffer, commandPosition, streamHeaderVersion);
+                                    long timestampNanos = commandStreamHeader.timestampNanos();
+                                    byte major = commandStreamHeader.major();
+                                    byte minor = commandStreamHeader.minor();
+                                    long source = commandStreamHeader.source();
+                                    long id = commandStreamHeader.id();
+                                    long ref = commandStreamHeader.ref();
+                                    int streamHeaderSize = commandStreamHeader.size();
+                                    commandPosition += streamHeaderSize;
+                                    commandByteBuffer.position((int)commandPosition);
 
-                                eventStreamHeader.wrap(eventDirectBuffer, eventPosition, streamHeaderVersion);
-                                eventStreamHeader.timestampNanos(timestampNanos);
-                                eventStreamHeader.major(major);
-                                eventStreamHeader.minor(minor);
-                                eventStreamHeader.source(source);
-                                eventStreamHeader.id(id);
-                                eventStreamHeader.ref(ref);
-                                eventPosition += streamHeaderSize;
-                                eventByteBuffer.position(eventPosition);
+                                    ByteUtils.fillWithSpaces(eventSourceBytes);
+                                    ByteUtils.putLongBigEndian(eventSourceBytes, 0, source);
 
-                                //payload
-                                int payloadSize = messageLength - streamHeaderSize;
-                                int bytesRead = commandDirectBuffer.getBytes(commandPosition, eventByteBuffer, payloadSize);
-                                assert (bytesRead == payloadSize);
-                                byte messageType = commandDirectBuffer.getByte(commandPosition);
-                                final byte eventMessageType = eventDirectBuffer.getByte(eventPosition);
-                                assert(messageType == eventMessageType);
-                                ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
-                                commandPosition += payloadSize;
-                                commandByteBuffer.position(commandPosition);
-                                eventPosition += payloadSize;
-                                eventByteBuffer.position(eventPosition);
+                                    int eventStreamHeaderPosition = eventPosition;
+                                    eventStreamHeader.wrap(eventDirectBuffer, eventPosition, streamHeaderVersion);
+                                    eventStreamHeader.timestampNanos(timestampNanos);
+                                    eventStreamHeader.major(major);
+                                    eventStreamHeader.minor(minor);
+                                    eventStreamHeader.source(source);
+                                    eventStreamHeader.id(id);
+                                    eventStreamHeader.ref(ref);
+                                    eventPosition += streamHeaderSize;
+                                    eventByteBuffer.position(eventPosition);
 
-                                //write event
-                                eventByteBuffer.flip();
-                                final int remaining = eventByteBuffer.remaining();
-                                short len = (short)(eventMoldUDP64Packet.size() + eventStreamHeader.size() + BitUtil.SIZE_OF_SHORT + payloadSize);
-                                assert(remaining == len);
-                                indexedBinaryFile.increment(len, eventByteBuffer);
-//                                indexedBinaryFile.force();
-//                                eventByteBuffer.flip();
+                                    //payload
+                                    int payloadSize = messageLength - streamHeaderSize;
+                                    int bytesRead = commandDirectBuffer.getBytes(commandPosition, eventByteBuffer, payloadSize);
+                                    assert (bytesRead == payloadSize);
+                                    byte messageType = commandDirectBuffer.getByte(commandPosition);
+                                    final byte eventMessageType = eventDirectBuffer.getByte(eventPosition);
+                                    assert(messageType == eventMessageType);
+                                    ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
+                                    commandPosition += payloadSize;
+                                    commandByteBuffer.position(commandPosition);
+                                    eventPosition += payloadSize;
+                                    eventByteBuffer.position(eventPosition);
 
-//                            log.info("[seq="+sourceSequence+"][commandPosition="+commandPosition+"][messageLength="+messageLength+"]");
-                                if((eventSequence <= 10) || (eventSequence % logModCount == 0)) {
-//                            if((sourceSequence >= 0)) {
-                                    sb.setLength(0);
-                                    sb.append("command:")
-                                            .append("[sequence=").append(eventSequence).append("]")
-                                            .append("[source=").append(new String(eventSourceBytes)).append("]")
-                                            .append("[sourceSequence=").append(sourceSequence).append("]")
-                                            .append("[moldUDP64PacketLength=").append(moldUDP64PacketLength).append("]")
-                                            .append("[messageLength=").append(messageLength).append("]")
-                                            .append("[streamHeaderSize=").append(streamHeaderSize).append("]")
-                                            .append("[payloadSize=").append(payloadSize).append("]")
-                                            .append("[itchMessageType=").append(itchMessageType).append("]")
-                                    ;
-                                    log.info(sb.toString());
+                                    //write event to indexed binary file
+                                    eventByteBuffer.mark();
+                                    int eventByteBufferLimit = eventByteBuffer.limit();
+                                    eventByteBuffer.position(eventStreamHeaderPosition);
+                                    eventByteBuffer.limit(eventPosition);
+//                                    eventByteBuffer.flip();
+                                    final int remaining = eventByteBuffer.remaining();
+                                    short len = (short)(eventStreamHeader.size() + payloadSize);
+//                                    assert(remaining == len);
+                                    final long startDataMappedFilePosition = indexedBinaryFile.getDataMappedFilePosition();
+                                    final long indexedBinaryFileSequence = indexedBinaryFile.increment(len, eventByteBuffer);
+                                    final long endDataMappedFilePosition = indexedBinaryFile.getDataMappedFilePosition();
+                                    assert(endDataMappedFilePosition == (startDataMappedFilePosition+len+BitUtil.SIZE_OF_SHORT));
+                                    assert(indexedBinaryFileSequence == eventSequence);
+                                    eventByteBuffer.limit(eventByteBufferLimit);
+
+                                    if((currentCommandSequence <= 1000) || (currentCommandSequence % logModCount == 0)) {
+                                        sb.setLength(0);
+                                        sb.append("command:")
+                                                .append("[session=").append(new String(sessionBytes)).append("]")
+                                                .append("[startingSourceSequence=").append(startingSourceSequence).append("]")
+                                                .append("[currentCommandSequence=").append(currentCommandSequence).append("]")
+                                                .append("[sequence=").append(eventSequence).append("]")
+                                                .append("[source=").append(new String(eventSourceBytes)).append("]")
+                                                .append("[sourceSequence=").append(sourceSequence).append("]")
+                                                .append("[moldUDP64PacketLength=").append(moldUDP64PacketLength).append("]")
+                                                .append("[messageLength=").append(messageLength).append("]")
+                                                .append("[streamHeaderSize=").append(streamHeaderSize).append("]")
+                                                .append("[payloadSize=").append(payloadSize).append("]")
+                                                .append("[bytesReceived=").append(bytesReceived).append("]")
+                                                .append("[totalBytesReceived=").append(totalBytesReceived).append("]")
+                                                .append("[itchMessageType=").append(itchMessageType).append("]")
+                                                .append("[DataMappedFilePosition=").append(indexedBinaryFile.getDataMappedFilePosition()).append("]")
+                                                .append("[IndexedMappedFilePosition=").append(indexedBinaryFile.getIndexedMappedFilePosition()).append("]")
+                                        ;
+                                        log.info(sb.toString());
+                                    }
+
+                                    currentCommandSequence = sequenceUtility.incrementSequence(sourceSequenceIndex);
+                                    eventSequence = sequenceUtility.incrementSequence(eventSequenceIndex);
+                                    sourceSequence++;
                                 }
+//                                indexedBinaryFile.force();
+
+
                                 if(!commandByteBuffer.hasRemaining()) {
                                     commandByteBuffer.clear();
                                     commandPosition = commandByteBuffer.position();
-//                                eventChannel.register(selector, SelectionKey.OP_WRITE);
-                                  writableSelectionKey.interestOps(SelectionKey.OP_WRITE);
+                                    writableSelectionKey.interestOps(SelectionKey.OP_WRITE);
                                 }
-//                            else {
-//                                commandByteBuffer.compact();
-//                            }
                             }
                         }
                     }
@@ -280,16 +312,20 @@ public class Sequencer2 {
                         eventPosition = eventByteBuffer.position();
                         eventByteBuffer.flip();
                         if(eventByteBuffer.hasRemaining()) {
+//                            indexedBinaryFile.force();
                             int eventBytesSent = eventChannel.send(eventByteBuffer, eventGroup);
-                            //                            eventSequence++;
-                            sequenceUtility.incrementSequence(eventSequenceIndex);
-
+                            totalBytesSent += eventBytesSent;
+//                            long eventSequence = sequenceUtility.incrementSequence(eventSequenceIndex);
                             long eventSequence = sequenceUtility.getSequence(eventSequenceIndex);
-                            if((eventSequence <= 10) || (eventSequence % logModCount == 0)) {
+                            if((eventSequence <= 1000) || (eventSequence % logModCount == 0)) {
                                 sb.setLength(0);
                                 sb.append("event:")
-                                        .append("[sequence=").append(eventSequence).append("]")
+                                        .append("[currentEventSequence=").append(currentEventSequence).append("]")
+                                        .append("[nextEventSequence=").append(eventSequence).append("]")
                                         .append("[eventBytesSent=").append(eventBytesSent).append("]")
+                                        .append("[totalBytesSent=").append(totalBytesSent).append("]")
+                                        .append("[DataMappedFilePosition=").append(indexedBinaryFile.getDataMappedFilePosition()).append("]")
+                                        .append("[IndexedMappedFilePosition=").append(indexedBinaryFile.getIndexedMappedFilePosition()).append("]")
                                 ;
                                 log.info(sb.toString());
                             }
@@ -297,8 +333,6 @@ public class Sequencer2 {
                               writableSelectionKey.interestOps(0);
                               eventByteBuffer.clear();
                               eventPosition = eventByteBuffer.position();
-//                            commandChannel.register(selector, SelectionKey.OP_READ);
-//                            readableSelectionKey.interestOps(SelectionKey.OP_READ);
                             }
                         }
                     }
@@ -374,12 +408,14 @@ public class Sequencer2 {
 
         String indexFileSuffix = "index";
         String dataFileSuffix = "data";
-        int dataFileBlockSize = ChronicleConfig.SMALL.dataBlockSize();
-        long dataFileInitialFileSize = ChronicleConfig.HUGE.dataBlockSize();
-        long dataFileGrowBySize = ChronicleConfig.SMALL.dataBlockSize();
+        final int one_gb = 1_073_741_824;
+        final int maxSegmentSize = MappedFileBuffer.MAX_SEGMENT_SIZE;
+        int dataFileBlockSize = MappedFileBuffer.MAX_SEGMENT_SIZE;
+        long dataFileInitialFileSize = MappedFileBuffer.MAX_SEGMENT_SIZE;
+        long dataFileGrowBySize = MappedFileBuffer.MAX_SEGMENT_SIZE;
 
         int indexFileBlockSize = BitUtil.SIZE_OF_LONG*2*1_000_000; //accomodate 1,000,000 entries
-        long indexFileInitialFileSize = BitUtil.SIZE_OF_LONG*2*1_000_000; //accomodate 1,000,000,000 entries
+        long indexFileInitialFileSize = BitUtil.SIZE_OF_LONG*50*1_000_000; //accomodate 1,000,000,000 entries
         long indexFileGrowBySize = BitUtil.SIZE_OF_LONG*2*1_000_000; //accomodate 1,000,000 entries
         boolean deleteIfExists = true;
         ByteOrder byteOrder = ByteOrder.BIG_ENDIAN;

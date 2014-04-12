@@ -52,7 +52,11 @@ implements BufferFacade, Cloneable
 
     private static final Logger log = LogManager.getLogger(MappedFileBuffer.class);
 
-    public final static int MAX_SEGMENT_SIZE = 0x8000000; // 1 GB, assures alignment
+//    public final static int MAX_SEGMENT_SIZE = 0x8000000; // 1 GB, assures alignment
+//    public final static int MAX_SEGMENT_SIZE = 0x40000000; // 1 GB, assures alignment
+    public final static int MAX_SEGMENT_SIZE = 1_073_741_824; // 1 GB, assures alignment
+
+
 
     public static final ByteOrder NATIVE_BYTE_ORDER = ByteOrder.nativeOrder();
 
@@ -140,6 +144,10 @@ implements BufferFacade, Cloneable
             throw new IllegalArgumentException(
                     "segment size too large (max is " + MAX_SEGMENT_SIZE + "): " + segmentSize);
 
+        if(initialFileSize <= 0) {
+            throw new IllegalArgumentException("Invalid initial File Size " + initialFileSize);
+        }
+
         if(deleteFileIfExists && file.exists()) {
             boolean deleted = file.delete();
             if(!deleted) {
@@ -172,6 +180,9 @@ implements BufferFacade, Cloneable
             long fileSize = Math.max(_segmentSize, capacity());
             long remainder = fileSize % _segmentSize;
             fileSize = _initialFileSize + remainder;
+            if(fileSize <= 0) {
+                throw new IllegalArgumentException("Invalid File Size " + fileSize);
+            }
 
             int bufArraySize = (int)(fileSize / segmentSize)
                              + ((fileSize % segmentSize != 0) ? 1 : 0);
