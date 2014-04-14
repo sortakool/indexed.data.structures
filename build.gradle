@@ -45,6 +45,8 @@ dependencies {
 
     compile 'uk.co.real_logic:sbe:0.1-SNAPSHOT'
 
+    test 'junit:junit:4.11'
+
 
     //make compile depend on sbe
 

@@ -604,4 +604,22 @@ public abstract class ByteUtils {
     public static void putFloatLittleEndian(byte[] bytes, int position, float x) {
         putIntLittleEndian(bytes, position, Float.floatToRawIntBits(x));
     }
+
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
+    /* Char                                                                                                                         */
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
+
+    /**
+     * @see java.nio.Bits#char1(char)
+     * @param x
+     * @return
+     */
+    public static byte char1(char x) { return (byte)(x >> 8); }
+
+    /**
+     * @see java.nio.Bits#char0(char)
+     * @param x
+     * @return
+     */
+    public static byte char0(char x) { return (byte)(x     ); }
 }

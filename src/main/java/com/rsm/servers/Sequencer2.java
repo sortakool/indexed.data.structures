@@ -255,19 +255,19 @@ public class Sequencer2 {
                                     eventByteBuffer.position(eventPosition);
 
                                     //write event to indexed binary file
-                                    eventByteBuffer.mark();
                                     int eventByteBufferLimit = eventByteBuffer.limit();
                                     eventByteBuffer.position(eventStreamHeaderPosition);
                                     eventByteBuffer.limit(eventPosition);
-//                                    eventByteBuffer.flip();
-                                    final int remaining = eventByteBuffer.remaining();
+//                                    final int remaining = eventByteBuffer.remaining();
                                     short len = (short)(eventStreamHeader.size() + payloadSize);
 //                                    assert(remaining == len);
                                     final long startDataMappedFilePosition = indexedBinaryFile.getDataMappedFilePosition();
+                                    eventByteBuffer.mark();
                                     final long indexedBinaryFileSequence = indexedBinaryFile.increment(len, eventByteBuffer);
                                     final long endDataMappedFilePosition = indexedBinaryFile.getDataMappedFilePosition();
                                     assert(endDataMappedFilePosition == (startDataMappedFilePosition+len+BitUtil.SIZE_OF_SHORT));
                                     assert(indexedBinaryFileSequence == eventSequence);
+//                                    eventByteBuffer.rewind();
                                     eventByteBuffer.limit(eventByteBufferLimit);
 
                                     if((currentCommandSequence <= 1000) || (currentCommandSequence % logModCount == 0)) {

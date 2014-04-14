@@ -191,7 +191,8 @@ implements BufferFacade, Cloneable
             for (long offset = 0 ; offset < fileSize ; offset += segmentSize)
             {
                 long remainingFileSize = fileSize - offset;
-                long thisSegmentSize = Math.min(2L * segmentSize, remainingFileSize);
+//                long thisSegmentSize = Math.min(2L * segmentSize, remainingFileSize);
+                long thisSegmentSize = Math.min(segmentSize, remainingFileSize);
                 _buffers[bufIdx++] = _channel.map(mapMode, offset, thisSegmentSize);
             }
             setByteOrder(NATIVE_BYTE_ORDER);
@@ -289,6 +290,15 @@ implements BufferFacade, Cloneable
 //----------------------------------------------------------------------------
 //  Public methods
 //----------------------------------------------------------------------------
+
+
+    public RandomAccessFile getRandomAccessFile() {
+        return _mappedFile;
+    }
+
+    public FileChannel getFileChannel() {
+        return _channel;
+    }
 
     public long position() {
         return position;
@@ -441,10 +451,10 @@ implements BufferFacade, Cloneable
             byte short1 = 0;
             switch (remaining) {
                 case 1:
-                    short1 = currentByteBuffer.get();
+                    short0 = currentByteBuffer.get();
                     position += 1;
                     currentByteBuffer = buffer(position);
-                    short0 = currentByteBuffer.get();
+                    short1 = currentByteBuffer.get();
                     position += 1;
                     break;
             }
@@ -476,10 +486,10 @@ implements BufferFacade, Cloneable
             byte short1 = 0;
             switch (remaining) {
                 case 1:
-                    short1 = buffer.get();
+                    short0 = buffer.get();
                     index += 1;
                     buffer = buffer(index);
-                    short0 = buffer.get();
+                    short1 = buffer.get();
                     index += 1;
                     break;
             }
@@ -514,14 +524,15 @@ implements BufferFacade, Cloneable
         if(NATIVE_BYTE_ORDER != byteOrder) {
             value = Short.reverseBytes(value);
         }
-        final MappedByteBuffer buffer = buffer(index);
+        MappedByteBuffer buffer = buffer(index);
         int remaining = buffer.remaining();
         if(remaining < 2) {
             switch (remaining) {
                 case 1:
-                    buffer.put(ByteUtils.short1(value));
-                    index += 1;
                     buffer.put(ByteUtils.short0(value));
+                    index += 1;
+                    buffer = buffer(index);
+                    buffer.put(ByteUtils.short1(value));
                     index += 1;
                     break;
             }
@@ -555,10 +566,10 @@ implements BufferFacade, Cloneable
         if(remaining < 2) {
             switch (remaining) {
                 case 1:
-                    currentByteBuffer.put(ByteUtils.short1(value));
+                    currentByteBuffer.put(ByteUtils.short0(value));
                     position += 1;
                     currentByteBuffer = buffer(position);
-                    currentByteBuffer.put(ByteUtils.short0(value));
+                    currentByteBuffer.put(ByteUtils.short1(value));
                     position += 1;
                     break;
             }
@@ -599,30 +610,30 @@ implements BufferFacade, Cloneable
             byte int3 = 0;
             switch(remaining) {
                 case 1:
-                    int3 = currentByteBuffer.get();
+                    int0 = currentByteBuffer.get();
                     position += 1;
                     currentByteBuffer = buffer(position);
-                    int2 = currentByteBuffer.get();
                     int1 = currentByteBuffer.get();
-                    int0 = currentByteBuffer.get();
+                    int2 = currentByteBuffer.get();
+                    int3 = currentByteBuffer.get();
                     position += 3;
                     break;
                 case 2:
-                    int3 = currentByteBuffer.get();
-                    int2 = currentByteBuffer.get();
+                    int0 = currentByteBuffer.get();
+                    int1 = currentByteBuffer.get();
                     position += 2;
                     currentByteBuffer = buffer(position);
-                    int1 = currentByteBuffer.get();
-                    int0 = currentByteBuffer.get();
+                    int2 = currentByteBuffer.get();
+                    int3 = currentByteBuffer.get();
                     position += 2;
                     break;
                 case 3:
-                    int3 = currentByteBuffer.get();
-                    int2 = currentByteBuffer.get();
+                    int0 = currentByteBuffer.get();
                     int1 = currentByteBuffer.get();
+                    int2 = currentByteBuffer.get();
                     position += 3;
                     currentByteBuffer = buffer(position);
-                    int0 = currentByteBuffer.get();
+                    int3 = currentByteBuffer.get();
                     position += 1;
                     break;
             }
@@ -660,30 +671,30 @@ implements BufferFacade, Cloneable
             byte int3 = 0;
             switch(remaining) {
                 case 1:
-                    int3 = buffer.get();
+                    int0 = buffer.get();
                     index += 1;
                     buffer = buffer(index);
-                    int2 = buffer.get();
                     int1 = buffer.get();
-                    int0 = buffer.get();
+                    int2 = buffer.get();
+                    int3 = buffer.get();
                     index += 3;
                     break;
                 case 2:
-                    int3 = buffer.get();
-                    int2 = buffer.get();
+                    int0 = buffer.get();
+                    int1 = buffer.get();
                     index += 2;
                     buffer = buffer(index);
-                    int1 = buffer.get();
-                    int0 = buffer.get();
+                    int2 = buffer.get();
+                    int3 = buffer.get();
                     index += 2;
                     break;
                 case 3:
-                    int3 = buffer.get();
-                    int2 = buffer.get();
+                    int0 = buffer.get();
                     int1 = buffer.get();
+                    int2 = buffer.get();
                     index += 3;
                     buffer = buffer(index);
-                    int0 = buffer.get();
+                    int3 = buffer.get();
                     index += 1;
                     break;
             }
@@ -715,30 +726,30 @@ implements BufferFacade, Cloneable
         if(remaining < 4) {
             switch(remaining) {
                 case 1:
-                    currentByteBuffer.put(ByteUtils.int3(value));
+                    currentByteBuffer.put(ByteUtils.int0(value));
                     position += 1;
                     currentByteBuffer = buffer(position);
-                    currentByteBuffer.put(ByteUtils.int2(value));
                     currentByteBuffer.put(ByteUtils.int1(value));
-                    currentByteBuffer.put(ByteUtils.int0(value));
+                    currentByteBuffer.put(ByteUtils.int2(value));
+                    currentByteBuffer.put(ByteUtils.int3(value));
                     position += 3;
                     break;
                 case 2:
-                    currentByteBuffer.put(ByteUtils.int3(value));
-                    currentByteBuffer.put(ByteUtils.int2(value));
+                    currentByteBuffer.put(ByteUtils.int0(value));
+                    currentByteBuffer.put(ByteUtils.int1(value));
                     position += 2;
                     currentByteBuffer = buffer(position);
-                    currentByteBuffer.put(ByteUtils.int1(value));
-                    currentByteBuffer.put(ByteUtils.int0(value));
+                    currentByteBuffer.put(ByteUtils.int2(value));
+                    currentByteBuffer.put(ByteUtils.int3(value));
                     position += 2;
                     break;
                 case 3:
-                    currentByteBuffer.put(ByteUtils.int3(value));
-                    currentByteBuffer.put(ByteUtils.int2(value));
+                    currentByteBuffer.put(ByteUtils.int0(value));
                     currentByteBuffer.put(ByteUtils.int1(value));
+                    currentByteBuffer.put(ByteUtils.int2(value));
                     position += 3;
                     currentByteBuffer = buffer(position);
-                    currentByteBuffer.put(ByteUtils.int0(value));
+                    currentByteBuffer.put(ByteUtils.int3(value));
                     position += 1;
                     break;
             }
@@ -772,30 +783,30 @@ implements BufferFacade, Cloneable
         if(remaining < 4) {
             switch(remaining) {
                 case 1:
-                    buffer.put(ByteUtils.int3(value));
+                    buffer.put(ByteUtils.int0(value));
                     index += 1;
                     buffer = buffer(index);
-                    buffer.put(ByteUtils.int2(value));
                     buffer.put(ByteUtils.int1(value));
-                    buffer.put(ByteUtils.int0(value));
+                    buffer.put(ByteUtils.int2(value));
+                    buffer.put(ByteUtils.int3(value));
                     index += 3;
                     break;
                 case 2:
-                    buffer.put(ByteUtils.int3(value));
-                    buffer.put(ByteUtils.int2(value));
+                    buffer.put(ByteUtils.int0(value));
+                    buffer.put(ByteUtils.int1(value));
                     index += 2;
                     buffer = buffer(index);
-                    buffer.put(ByteUtils.int1(value));
-                    buffer.put(ByteUtils.int0(value));
+                    buffer.put(ByteUtils.int2(value));
+                    buffer.put(ByteUtils.int3(value));
                     index += 2;
                     break;
                 case 3:
-                    buffer.put(ByteUtils.int3(value));
-                    buffer.put(ByteUtils.int2(value));
+                    buffer.put(ByteUtils.int0(value));
                     buffer.put(ByteUtils.int1(value));
+                    buffer.put(ByteUtils.int2(value));
                     index += 3;
                     buffer = buffer(index);
-                    buffer.put(ByteUtils.int0(value));
+                    buffer.put(ByteUtils.int3(value));
                     index += 1;
                     break;
             }
@@ -831,94 +842,94 @@ implements BufferFacade, Cloneable
             byte long7 = 0;
             switch (remaining) {
                 case 1:
-                    long7 = currentByteBuffer.get();
+                    long0 = currentByteBuffer.get();
                     position += 1;
                     currentByteBuffer = buffer(position);
-                    long6 = currentByteBuffer.get();
-                    long5 = currentByteBuffer.get();
-                    long4 = currentByteBuffer.get();
-                    long3 = currentByteBuffer.get();
-                    long2 = currentByteBuffer.get();
                     long1 = currentByteBuffer.get();
-                    long0 = currentByteBuffer.get();
+                    long2 = currentByteBuffer.get();
+                    long3 = currentByteBuffer.get();
+                    long4 = currentByteBuffer.get();
+                    long5 = currentByteBuffer.get();
+                    long6 = currentByteBuffer.get();
+                    long7 = currentByteBuffer.get();
                     position += 7;
                     break;
                 case 2:
-                    long7 = currentByteBuffer.get();
-                    long6 = currentByteBuffer.get();
+                    long0 = currentByteBuffer.get();
+                    long1 = currentByteBuffer.get();
                     position += 2;
                     currentByteBuffer = buffer(position);
-                    long5 = currentByteBuffer.get();
-                    long4 = currentByteBuffer.get();
-                    long3 = currentByteBuffer.get();
                     long2 = currentByteBuffer.get();
-                    long1 = currentByteBuffer.get();
-                    long0 = currentByteBuffer.get();
+                    long3 = currentByteBuffer.get();
+                    long4 = currentByteBuffer.get();
+                    long5 = currentByteBuffer.get();
+                    long6 = currentByteBuffer.get();
+                    long7 = currentByteBuffer.get();
                     position += 6;
                     break;
                 case 3:
-                    long7 = currentByteBuffer.get();
-                    long6 = currentByteBuffer.get();
-                    long5 = currentByteBuffer.get();
+                    long0 = currentByteBuffer.get();
+                    long1 = currentByteBuffer.get();
+                    long2 = currentByteBuffer.get();
                     position += 3;
                     currentByteBuffer = buffer(position);
-                    long4 = currentByteBuffer.get();
                     long3 = currentByteBuffer.get();
-                    long2 = currentByteBuffer.get();
-                    long1 = currentByteBuffer.get();
-                    long0 = currentByteBuffer.get();
+                    long4 = currentByteBuffer.get();
+                    long5 = currentByteBuffer.get();
+                    long6 = currentByteBuffer.get();
+                    long7 = currentByteBuffer.get();
                     position += 5;
                     break;
                 case 4:
-                    long7 = currentByteBuffer.get();
-                    long6 = currentByteBuffer.get();
-                    long5 = currentByteBuffer.get();
-                    long4 = currentByteBuffer.get();
+                    long0 = currentByteBuffer.get();
+                    long1 = currentByteBuffer.get();
+                    long2 = currentByteBuffer.get();
+                    long3 = currentByteBuffer.get();
                     position += 4;
                     currentByteBuffer = buffer(position);
-                    long3 = currentByteBuffer.get();
-                    long2 = currentByteBuffer.get();
-                    long1 = currentByteBuffer.get();
-                    long0 = currentByteBuffer.get();
+                    long4 = currentByteBuffer.get();
+                    long5 = currentByteBuffer.get();
+                    long6 = currentByteBuffer.get();
+                    long7 = currentByteBuffer.get();
                     position += 4;
                     break;
                 case 5:
-                    long7 = currentByteBuffer.get();
-                    long6 = currentByteBuffer.get();
-                    long5 = currentByteBuffer.get();
-                    long4 = currentByteBuffer.get();
+                    long0 = currentByteBuffer.get();
+                    long1 = currentByteBuffer.get();
+                    long2 = currentByteBuffer.get();
                     long3 = currentByteBuffer.get();
+                    long4 = currentByteBuffer.get();
                     position += 5;
                     currentByteBuffer = buffer(position);
-                    long2 = currentByteBuffer.get();
-                    long1 = currentByteBuffer.get();
-                    long0 = currentByteBuffer.get();
+                    long5 = currentByteBuffer.get();
+                    long6 = currentByteBuffer.get();
+                    long7 = currentByteBuffer.get();
                     position += 3;
                     break;
                 case 6:
-                    long7 = currentByteBuffer.get();
-                    long6 = currentByteBuffer.get();
-                    long5 = currentByteBuffer.get();
-                    long4 = currentByteBuffer.get();
-                    long3 = currentByteBuffer.get();
+                    long0 = currentByteBuffer.get();
+                    long1 = currentByteBuffer.get();
                     long2 = currentByteBuffer.get();
+                    long3 = currentByteBuffer.get();
+                    long4 = currentByteBuffer.get();
+                    long5 = currentByteBuffer.get();
                     position += 6;
                     currentByteBuffer = buffer(position);
-                    long1 = currentByteBuffer.get();
-                    long0 = currentByteBuffer.get();
+                    long6 = currentByteBuffer.get();
+                    long7 = currentByteBuffer.get();
                     position += 2;
                     break;
                 case 7:
-                    long7 = currentByteBuffer.get();
-                    long6 = currentByteBuffer.get();
-                    long5 = currentByteBuffer.get();
-                    long4 = currentByteBuffer.get();
-                    long3 = currentByteBuffer.get();
-                    long2 = currentByteBuffer.get();
+                    long0 = currentByteBuffer.get();
                     long1 = currentByteBuffer.get();
+                    long2 = currentByteBuffer.get();
+                    long3 = currentByteBuffer.get();
+                    long4 = currentByteBuffer.get();
+                    long5 = currentByteBuffer.get();
+                    long6 = currentByteBuffer.get();
                     position += 7;
                     currentByteBuffer = buffer(position);
-                    long0 = currentByteBuffer.get();
+                    long7 = currentByteBuffer.get();
                     position += 1;
                     break;
             }
@@ -960,94 +971,94 @@ implements BufferFacade, Cloneable
             byte long7 = 0;
             switch (remaining) {
                 case 1:
-                    long7 = buffer.get();
+                    long0 = buffer.get();
                     index += 1;
                     buffer = buffer(index);
-                    long6 = buffer.get();
-                    long5 = buffer.get();
-                    long4 = buffer.get();
-                    long3 = buffer.get();
-                    long2 = buffer.get();
                     long1 = buffer.get();
-                    long0 = buffer.get();
+                    long2 = buffer.get();
+                    long3 = buffer.get();
+                    long4 = buffer.get();
+                    long5 = buffer.get();
+                    long6 = buffer.get();
+                    long7 = buffer.get();
                     index += 7;
                     break;
                 case 2:
-                    long7 = buffer.get();
-                    long6 = buffer.get();
+                    long0 = buffer.get();
+                    long1 = buffer.get();
                     index += 2;
                     buffer = buffer(index);
-                    long5 = buffer.get();
-                    long4 = buffer.get();
-                    long3 = buffer.get();
                     long2 = buffer.get();
-                    long1 = buffer.get();
-                    long0 = buffer.get();
+                    long3 = buffer.get();
+                    long4 = buffer.get();
+                    long5 = buffer.get();
+                    long6 = buffer.get();
+                    long7 = buffer.get();
                     index += 6;
                     break;
                 case 3:
-                    long7 = buffer.get();
-                    long6 = buffer.get();
-                    long5 = buffer.get();
+                    long0 = buffer.get();
+                    long1 = buffer.get();
+                    long2 = buffer.get();
                     index += 3;
                     buffer = buffer(index);
-                    long4 = buffer.get();
                     long3 = buffer.get();
-                    long2 = buffer.get();
-                    long1 = buffer.get();
-                    long0 = buffer.get();
+                    long4 = buffer.get();
+                    long5 = buffer.get();
+                    long6 = buffer.get();
+                    long7 = buffer.get();
                     index += 5;
                     break;
                 case 4:
-                    long7 = buffer.get();
-                    long6 = buffer.get();
-                    long5 = buffer.get();
-                    long4 = buffer.get();
+                    long0 = buffer.get();
+                    long1 = buffer.get();
+                    long2 = buffer.get();
+                    long3 = buffer.get();
                     index += 4;
                     buffer = buffer(index);
-                    long3 = buffer.get();
-                    long2 = buffer.get();
-                    long1 = buffer.get();
-                    long0 = buffer.get();
+                    long4 = buffer.get();
+                    long5 = buffer.get();
+                    long6 = buffer.get();
+                    long7 = buffer.get();
                     index += 4;
                     break;
                 case 5:
-                    long7 = buffer.get();
-                    long6 = buffer.get();
-                    long5 = buffer.get();
-                    long4 = buffer.get();
+                    long0 = buffer.get();
+                    long1 = buffer.get();
+                    long2 = buffer.get();
                     long3 = buffer.get();
+                    long4 = buffer.get();
                     index += 5;
                     buffer = buffer(index);
-                    long2 = buffer.get();
-                    long1 = buffer.get();
-                    long0 = buffer.get();
+                    long5 = buffer.get();
+                    long6 = buffer.get();
+                    long7 = buffer.get();
                     index += 3;
                     break;
                 case 6:
-                    long7 = buffer.get();
-                    long6 = buffer.get();
-                    long5 = buffer.get();
-                    long4 = buffer.get();
-                    long3 = buffer.get();
+                    long0 = buffer.get();
+                    long1 = buffer.get();
                     long2 = buffer.get();
+                    long3 = buffer.get();
+                    long4 = buffer.get();
+                    long5 = buffer.get();
                     index += 6;
                     buffer = buffer(index);
-                    long1 = buffer.get();
-                    long0 = buffer.get();
+                    long6 = buffer.get();
+                    long7 = buffer.get();
                     index += 2;
                     break;
                 case 7:
-                    long7 = buffer.get();
-                    long6 = buffer.get();
-                    long5 = buffer.get();
-                    long4 = buffer.get();
-                    long3 = buffer.get();
-                    long2 = buffer.get();
+                    long0 = buffer.get();
                     long1 = buffer.get();
+                    long2 = buffer.get();
+                    long3 = buffer.get();
+                    long4 = buffer.get();
+                    long5 = buffer.get();
+                    long6 = buffer.get();
                     index += 7;
                     buffer = buffer(index);
-                    long0 = buffer.get();
+                    long7 = buffer.get();
                     index += 1;
                     break;
             }
@@ -1082,94 +1093,94 @@ implements BufferFacade, Cloneable
         if(remaining < 8) {
             switch(remaining) {
                 case 1:
-                    currentByteBuffer.put(ByteUtils.long7(value));
+                    currentByteBuffer.put(ByteUtils.long0(value));
                     position += 1;
                     currentByteBuffer = buffer(position);
-                    currentByteBuffer.put(ByteUtils.long6(value));
-                    currentByteBuffer.put(ByteUtils.long5(value));
-                    currentByteBuffer.put(ByteUtils.long4(value));
-                    currentByteBuffer.put(ByteUtils.long3(value));
-                    currentByteBuffer.put(ByteUtils.long2(value));
                     currentByteBuffer.put(ByteUtils.long1(value));
-                    currentByteBuffer.put(ByteUtils.long0(value));
+                    currentByteBuffer.put(ByteUtils.long2(value));
+                    currentByteBuffer.put(ByteUtils.long3(value));
+                    currentByteBuffer.put(ByteUtils.long4(value));
+                    currentByteBuffer.put(ByteUtils.long5(value));
+                    currentByteBuffer.put(ByteUtils.long6(value));
+                    currentByteBuffer.put(ByteUtils.long7(value));
                     position += 7;
                     break;
                 case 2:
-                    currentByteBuffer.put(ByteUtils.long7(value));
-                    currentByteBuffer.put(ByteUtils.long6(value));
+                    currentByteBuffer.put(ByteUtils.long0(value));
+                    currentByteBuffer.put(ByteUtils.long1(value));
                     position += 2;
                     currentByteBuffer = buffer(position);
-                    currentByteBuffer.put(ByteUtils.long5(value));
-                    currentByteBuffer.put(ByteUtils.long4(value));
-                    currentByteBuffer.put(ByteUtils.long3(value));
                     currentByteBuffer.put(ByteUtils.long2(value));
-                    currentByteBuffer.put(ByteUtils.long1(value));
-                    currentByteBuffer.put(ByteUtils.long0(value));
+                    currentByteBuffer.put(ByteUtils.long3(value));
+                    currentByteBuffer.put(ByteUtils.long4(value));
+                    currentByteBuffer.put(ByteUtils.long5(value));
+                    currentByteBuffer.put(ByteUtils.long6(value));
+                    currentByteBuffer.put(ByteUtils.long7(value));
                     position += 6;
                     break;
                 case 3:
-                    currentByteBuffer.put(ByteUtils.long7(value));
-                    currentByteBuffer.put(ByteUtils.long6(value));
-                    currentByteBuffer.put(ByteUtils.long5(value));
+                    currentByteBuffer.put(ByteUtils.long0(value));
+                    currentByteBuffer.put(ByteUtils.long1(value));
+                    currentByteBuffer.put(ByteUtils.long2(value));
                     position += 3;
                     currentByteBuffer = buffer(position);
-                    currentByteBuffer.put(ByteUtils.long4(value));
                     currentByteBuffer.put(ByteUtils.long3(value));
-                    currentByteBuffer.put(ByteUtils.long2(value));
-                    currentByteBuffer.put(ByteUtils.long1(value));
-                    currentByteBuffer.put(ByteUtils.long0(value));
+                    currentByteBuffer.put(ByteUtils.long4(value));
+                    currentByteBuffer.put(ByteUtils.long5(value));
+                    currentByteBuffer.put(ByteUtils.long6(value));
+                    currentByteBuffer.put(ByteUtils.long7(value));
                     position += 5;
                     break;
                 case 4:
-                    currentByteBuffer.put(ByteUtils.long7(value));
-                    currentByteBuffer.put(ByteUtils.long6(value));
-                    currentByteBuffer.put(ByteUtils.long5(value));
-                    currentByteBuffer.put(ByteUtils.long4(value));
+                    currentByteBuffer.put(ByteUtils.long0(value));
+                    currentByteBuffer.put(ByteUtils.long1(value));
+                    currentByteBuffer.put(ByteUtils.long2(value));
+                    currentByteBuffer.put(ByteUtils.long3(value));
                     position += 4;
                     currentByteBuffer = buffer(position);
-                    currentByteBuffer.put(ByteUtils.long3(value));
-                    currentByteBuffer.put(ByteUtils.long2(value));
-                    currentByteBuffer.put(ByteUtils.long1(value));
-                    currentByteBuffer.put(ByteUtils.long0(value));
+                    currentByteBuffer.put(ByteUtils.long4(value));
+                    currentByteBuffer.put(ByteUtils.long5(value));
+                    currentByteBuffer.put(ByteUtils.long6(value));
+                    currentByteBuffer.put(ByteUtils.long7(value));
                     position += 4;
                     break;
                 case 5:
-                    currentByteBuffer.put(ByteUtils.long7(value));
-                    currentByteBuffer.put(ByteUtils.long6(value));
-                    currentByteBuffer.put(ByteUtils.long5(value));
-                    currentByteBuffer.put(ByteUtils.long4(value));
+                    currentByteBuffer.put(ByteUtils.long0(value));
+                    currentByteBuffer.put(ByteUtils.long1(value));
+                    currentByteBuffer.put(ByteUtils.long2(value));
                     currentByteBuffer.put(ByteUtils.long3(value));
+                    currentByteBuffer.put(ByteUtils.long4(value));
                     position += 5;
                     currentByteBuffer = buffer(position);
-                    currentByteBuffer.put(ByteUtils.long2(value));
-                    currentByteBuffer.put(ByteUtils.long1(value));
-                    currentByteBuffer.put(ByteUtils.long0(value));
+                    currentByteBuffer.put(ByteUtils.long5(value));
+                    currentByteBuffer.put(ByteUtils.long6(value));
+                    currentByteBuffer.put(ByteUtils.long7(value));
                     position += 3;
                     break;
                 case 6:
-                    currentByteBuffer.put(ByteUtils.long7(value));
-                    currentByteBuffer.put(ByteUtils.long6(value));
-                    currentByteBuffer.put(ByteUtils.long5(value));
-                    currentByteBuffer.put(ByteUtils.long4(value));
-                    currentByteBuffer.put(ByteUtils.long3(value));
+                    currentByteBuffer.put(ByteUtils.long0(value));
+                    currentByteBuffer.put(ByteUtils.long1(value));
                     currentByteBuffer.put(ByteUtils.long2(value));
+                    currentByteBuffer.put(ByteUtils.long3(value));
+                    currentByteBuffer.put(ByteUtils.long4(value));
+                    currentByteBuffer.put(ByteUtils.long5(value));
                     position += 6;
                     currentByteBuffer = buffer(position);
-                    currentByteBuffer.put(ByteUtils.long1(value));
-                    currentByteBuffer.put(ByteUtils.long0(value));
+                    currentByteBuffer.put(ByteUtils.long6(value));
+                    currentByteBuffer.put(ByteUtils.long7(value));
                     position += 2;
                     break;
                 case 7:
-                    currentByteBuffer.put(ByteUtils.long7(value));
-                    currentByteBuffer.put(ByteUtils.long6(value));
-                    currentByteBuffer.put(ByteUtils.long5(value));
-                    currentByteBuffer.put(ByteUtils.long4(value));
-                    currentByteBuffer.put(ByteUtils.long3(value));
-                    currentByteBuffer.put(ByteUtils.long2(value));
+                    currentByteBuffer.put(ByteUtils.long0(value));
                     currentByteBuffer.put(ByteUtils.long1(value));
+                    currentByteBuffer.put(ByteUtils.long2(value));
+                    currentByteBuffer.put(ByteUtils.long3(value));
+                    currentByteBuffer.put(ByteUtils.long4(value));
+                    currentByteBuffer.put(ByteUtils.long5(value));
+                    currentByteBuffer.put(ByteUtils.long6(value));
                     position += 7;
                     currentByteBuffer = buffer(position);
-                    currentByteBuffer.put(ByteUtils.long0(value));
+                    currentByteBuffer.put(ByteUtils.long7(value));
                     position += 1;
                     break;
             }
@@ -1205,94 +1216,94 @@ implements BufferFacade, Cloneable
         if(remaining < 8) {
             switch(remaining) {
                 case 1:
-                    buffer.put(ByteUtils.long7(value));
+                    buffer.put(ByteUtils.long0(value));
                     index += 1;
                     buffer = buffer(index);
-                    buffer.put(ByteUtils.long6(value));
-                    buffer.put(ByteUtils.long5(value));
-                    buffer.put(ByteUtils.long4(value));
-                    buffer.put(ByteUtils.long3(value));
-                    buffer.put(ByteUtils.long2(value));
                     buffer.put(ByteUtils.long1(value));
-                    buffer.put(ByteUtils.long0(value));
+                    buffer.put(ByteUtils.long2(value));
+                    buffer.put(ByteUtils.long3(value));
+                    buffer.put(ByteUtils.long4(value));
+                    buffer.put(ByteUtils.long5(value));
+                    buffer.put(ByteUtils.long6(value));
+                    buffer.put(ByteUtils.long7(value));
                     index += 7;
                     break;
                 case 2:
-                    buffer.put(ByteUtils.long7(value));
-                    buffer.put(ByteUtils.long6(value));
+                    buffer.put(ByteUtils.long0(value));
+                    buffer.put(ByteUtils.long1(value));
                     index += 2;
                     buffer = buffer(index);
-                    buffer.put(ByteUtils.long5(value));
-                    buffer.put(ByteUtils.long4(value));
-                    buffer.put(ByteUtils.long3(value));
                     buffer.put(ByteUtils.long2(value));
-                    buffer.put(ByteUtils.long1(value));
-                    buffer.put(ByteUtils.long0(value));
+                    buffer.put(ByteUtils.long3(value));
+                    buffer.put(ByteUtils.long4(value));
+                    buffer.put(ByteUtils.long5(value));
+                    buffer.put(ByteUtils.long6(value));
+                    buffer.put(ByteUtils.long7(value));
                     index += 6;
                     break;
                 case 3:
-                    buffer.put(ByteUtils.long7(value));
-                    buffer.put(ByteUtils.long6(value));
-                    buffer.put(ByteUtils.long5(value));
+                    buffer.put(ByteUtils.long0(value));
+                    buffer.put(ByteUtils.long1(value));
+                    buffer.put(ByteUtils.long2(value));
                     index += 3;
                     buffer = buffer(index);
-                    buffer.put(ByteUtils.long4(value));
                     buffer.put(ByteUtils.long3(value));
-                    buffer.put(ByteUtils.long2(value));
-                    buffer.put(ByteUtils.long1(value));
-                    buffer.put(ByteUtils.long0(value));
+                    buffer.put(ByteUtils.long4(value));
+                    buffer.put(ByteUtils.long5(value));
+                    buffer.put(ByteUtils.long6(value));
+                    buffer.put(ByteUtils.long7(value));
                     index += 5;
                     break;
                 case 4:
-                    buffer.put(ByteUtils.long7(value));
-                    buffer.put(ByteUtils.long6(value));
-                    buffer.put(ByteUtils.long5(value));
-                    buffer.put(ByteUtils.long4(value));
+                    buffer.put(ByteUtils.long0(value));
+                    buffer.put(ByteUtils.long1(value));
+                    buffer.put(ByteUtils.long2(value));
+                    buffer.put(ByteUtils.long3(value));
                     index += 4;
                     buffer = buffer(index);
-                    buffer.put(ByteUtils.long3(value));
-                    buffer.put(ByteUtils.long2(value));
-                    buffer.put(ByteUtils.long1(value));
-                    buffer.put(ByteUtils.long0(value));
+                    buffer.put(ByteUtils.long4(value));
+                    buffer.put(ByteUtils.long5(value));
+                    buffer.put(ByteUtils.long6(value));
+                    buffer.put(ByteUtils.long7(value));
                     index += 4;
                     break;
                 case 5:
-                    buffer.put(ByteUtils.long7(value));
-                    buffer.put(ByteUtils.long6(value));
-                    buffer.put(ByteUtils.long5(value));
-                    buffer.put(ByteUtils.long4(value));
+                    buffer.put(ByteUtils.long0(value));
+                    buffer.put(ByteUtils.long1(value));
+                    buffer.put(ByteUtils.long2(value));
                     buffer.put(ByteUtils.long3(value));
+                    buffer.put(ByteUtils.long4(value));
                     index += 5;
                     buffer = buffer(index);
-                    buffer.put(ByteUtils.long2(value));
-                    buffer.put(ByteUtils.long1(value));
-                    buffer.put(ByteUtils.long0(value));
+                    buffer.put(ByteUtils.long5(value));
+                    buffer.put(ByteUtils.long6(value));
+                    buffer.put(ByteUtils.long7(value));
                     index += 3;
                     break;
                 case 6:
-                    buffer.put(ByteUtils.long7(value));
-                    buffer.put(ByteUtils.long6(value));
-                    buffer.put(ByteUtils.long5(value));
-                    buffer.put(ByteUtils.long4(value));
-                    buffer.put(ByteUtils.long3(value));
+                    buffer.put(ByteUtils.long0(value));
+                    buffer.put(ByteUtils.long1(value));
                     buffer.put(ByteUtils.long2(value));
+                    buffer.put(ByteUtils.long3(value));
+                    buffer.put(ByteUtils.long4(value));
+                    buffer.put(ByteUtils.long5(value));
                     index += 6;
                     buffer = buffer(index);
-                    buffer.put(ByteUtils.long1(value));
-                    buffer.put(ByteUtils.long0(value));
+                    buffer.put(ByteUtils.long6(value));
+                    buffer.put(ByteUtils.long7(value));
                     index += 2;
                     break;
                 case 7:
-                    buffer.put(ByteUtils.long7(value));
-                    buffer.put(ByteUtils.long6(value));
-                    buffer.put(ByteUtils.long5(value));
-                    buffer.put(ByteUtils.long4(value));
-                    buffer.put(ByteUtils.long3(value));
-                    buffer.put(ByteUtils.long2(value));
+                    buffer.put(ByteUtils.long0(value));
                     buffer.put(ByteUtils.long1(value));
+                    buffer.put(ByteUtils.long2(value));
+                    buffer.put(ByteUtils.long3(value));
+                    buffer.put(ByteUtils.long4(value));
+                    buffer.put(ByteUtils.long5(value));
+                    buffer.put(ByteUtils.long6(value));
                     index += 7;
                     buffer = buffer(index);
-                    buffer.put(ByteUtils.long0(value));
+                    buffer.put(ByteUtils.long7(value));
                     index += 1;
                     break;
             }
@@ -1331,9 +1342,38 @@ implements BufferFacade, Cloneable
      */
     public float getFloat(long index)
     {
-        return buffer(index).getFloat();
+        return getFloat(index, getByteOrder());
     }
 
+    /**
+     *  Retrieves a four-byte floating-point number starting at the specified
+     *  index.
+     */
+    public float getFloat(long index, ByteOrder byteOrder)
+    {
+        final int bits = getInt(index, byteOrder);
+        float value = Float.intBitsToFloat(bits);
+        return value;
+    }
+
+    /**
+     *  Stores a four-byte floating-point number starting at the current positon
+     *  index.
+     */
+    public void putFloat(float value)
+    {
+        putFloat(value, getByteOrder());
+    }
+
+    /**
+     *  Stores a four-byte floating-point number starting at the current positon
+     *  index.
+     */
+    public void putFloat(float value, ByteOrder byteOrder)
+    {
+        final int intBits = Float.floatToIntBits(value);
+        putInt(intBits, byteOrder);
+    }
 
     /**
      *  Stores a four-byte floating-point number starting at the specified
@@ -1341,9 +1381,42 @@ implements BufferFacade, Cloneable
      */
     public void putFloat(long index, float value)
     {
-        buffer(index).putFloat(value);
+        putFloat(index, value, getByteOrder());
     }
 
+    /**
+     *  Stores a four-byte floating-point number starting at the specified
+     *  index.
+     */
+    public void putFloat(long index, float value, ByteOrder byteOrder)
+    {
+        final int intBits = Float.floatToIntBits(value);
+        putInt(index, intBits, byteOrder);
+    }
+
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
+    /* Double                                                                                                                         */
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
+
+    /**
+     *  Retrieves an eight-byte floating-point number starting at the specified
+     *  index.
+     */
+    public double getDouble()
+    {
+        return getDouble(getByteOrder());
+    }
+
+    /**
+     *  Retrieves an eight-byte floating-point number starting at the specified
+     *  index.
+     */
+    public double getDouble(ByteOrder byteOrder)
+    {
+        final long bits = getLong(byteOrder);
+        final double value = Double.longBitsToDouble(bits);
+        return value;
+    }
 
     /**
      *  Retrieves an eight-byte floating-point number starting at the specified
@@ -1351,9 +1424,36 @@ implements BufferFacade, Cloneable
      */
     public double getDouble(long index)
     {
-        return buffer(index).getDouble();
+        return getDouble(index, getByteOrder());
     }
 
+    /**
+     *  Retrieves an eight-byte floating-point number starting at the specified
+     *  index.
+     */
+    public double getDouble(long index, ByteOrder byteOrder)
+    {
+        final long bits = getLong(index, byteOrder);
+        final double value = Double.longBitsToDouble(bits);
+        return value;
+    }
+
+    /**
+     *  Stores an eight-byte floating-point number starting at the current position
+     */
+    public void putDouble(double value)
+    {
+        putDouble(value, getByteOrder());
+    }
+
+    /**
+     *  Stores an eight-byte floating-point number starting at the current position
+     */
+    public void putDouble(double value, ByteOrder byteOrder)
+    {
+        final long bits = Double.doubleToLongBits(value);
+        putLong(bits, byteOrder);
+    }
 
     /**
      *  Stores an eight-byte floating-point number starting at the specified
@@ -1361,9 +1461,22 @@ implements BufferFacade, Cloneable
      */
     public void putDouble(long index, double value)
     {
-        buffer(index).putDouble(value);
+        putDouble(index, value, getByteOrder());
     }
 
+    /**
+     *  Stores an eight-byte floating-point number starting at the specified
+     *  index.
+     */
+    public void putDouble(long index, double value, ByteOrder byteOrder)
+    {
+        final long bits = Double.doubleToLongBits(value);
+        putLong(index, bits, byteOrder);
+    }
+
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
+    /* Char                                                                                                                         */
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
 
     /**
      *  Retrieves a two-byte character starting at the specified  index (note
@@ -1383,6 +1496,10 @@ implements BufferFacade, Cloneable
         buffer(index).putChar(value);
     }
 
+
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
+    /* Bytes                                                                                                                         */
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
 
     /**
      *  Retrieves <code>len</code> bytes starting at the specified index,
@@ -1499,6 +1616,7 @@ implements BufferFacade, Cloneable
             ByteBuffer buf = buffer(index);
             int count = Math.min(len, buf.remaining());
             for(int i=0; i< count; i++) {
+                assert(destination.remaining() != 0);
                 destination.put(buf.get());
             }
             index += count;
