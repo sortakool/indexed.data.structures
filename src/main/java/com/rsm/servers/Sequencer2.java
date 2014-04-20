@@ -8,6 +8,7 @@ import com.rsm.message.nasdaq.binaryfile.IndexedBinaryFile;
 import com.rsm.message.nasdaq.binaryfile.IndexedBinaryFileConfig;
 import com.rsm.message.nasdaq.itch.v4_1.*;
 import com.rsm.message.nasdaq.moldudp.MoldUDPUtil;
+import com.rsm.util.ByteUnit;
 import com.rsm.util.ByteUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -406,8 +407,8 @@ public class Sequencer2 {
         String indexFileSuffix = "index";
         String dataFileSuffix = "data";
 //        final int one_gb = 1_073_741_824;
-        final long maxSegmentSize = MappedFileBuffer.MAX_SEGMENT_SIZE;
-        long dataFileBlockSize = MappedFileBuffer.MAX_SEGMENT_SIZE;
+//        final long maxSegmentSize = MappedFileBuffer.MAX_SEGMENT_SIZE;
+        long dataFileBlockSize = ByteUnit.MEGABYTE.getBytes() * 256;
         long dataFileInitialFileSize = ((long)MappedFileBuffer.MAX_SEGMENT_SIZE)*50L;
 //        long dataFileGrowBySize = MappedFileBuffer.MAX_SEGMENT_SIZE;
 
