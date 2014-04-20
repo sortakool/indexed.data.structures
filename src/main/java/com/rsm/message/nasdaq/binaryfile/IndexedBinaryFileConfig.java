@@ -24,13 +24,13 @@ public class IndexedBinaryFileConfig {
 
     private ByteOrder byteOrder = ByteOrder.BIG_ENDIAN;
 
-    private int dataFileBlockSize;
+    private long dataFileBlockSize;
     private long dataFileInitialFileSize;
-    private long dataFileGrowBySize;
+//    private long dataFileGrowBySize;
 
-    private int indexFileBlockSize;
+    private long indexFileBlockSize;
     private long indexFileInitialFileSize;
-    private long indexFileGrowBySize;
+//    private long indexFileGrowBySize;
 
     private boolean deleteIfExists = false;
 
@@ -40,7 +40,7 @@ public class IndexedBinaryFileConfig {
 
     public IndexedBinaryFileConfig(String directoryPath, String baseFileName, String indexFileSuffix, String dataFileSuffix,
 //                                   Path directoryPathPath, Path dataFilePath, Path indexFilePath, File dataFile, File indexFile,
-                                   ByteOrder byteOrder, int dataFileBlockSize, long dataFileInitialFileSize, long dataFileGrowBySize, int indexFileBlockSize, long indexFileInitialFileSize, long indexFileGrowBySize, boolean deleteIfExists) {
+                                   ByteOrder byteOrder, long dataFileBlockSize, long dataFileInitialFileSize, long indexFileBlockSize, long indexFileInitialFileSize, boolean deleteIfExists) {
         this.directoryPath = directoryPath;
         this.baseFileName = baseFileName;
         this.indexFileSuffix = indexFileSuffix;
@@ -53,10 +53,10 @@ public class IndexedBinaryFileConfig {
         this.byteOrder = byteOrder;
         this.dataFileBlockSize = dataFileBlockSize;
         this.dataFileInitialFileSize = dataFileInitialFileSize;
-        this.dataFileGrowBySize = dataFileGrowBySize;
+//        this.dataFileGrowBySize = dataFileGrowBySize;
         this.indexFileBlockSize = indexFileBlockSize;
         this.indexFileInitialFileSize = indexFileInitialFileSize;
-        this.indexFileGrowBySize = indexFileGrowBySize;
+//        this.indexFileGrowBySize = indexFileGrowBySize;
         this.deleteIfExists = deleteIfExists;
     }
 
@@ -140,11 +140,11 @@ public class IndexedBinaryFileConfig {
         this.byteOrder = byteOrder;
     }
 
-    public int getDataFileBlockSize() {
+    public long getDataFileBlockSize() {
         return dataFileBlockSize;
     }
 
-    public void setDataFileBlockSize(int dataFileBlockSize) {
+    public void setDataFileBlockSize(long dataFileBlockSize) {
         this.dataFileBlockSize = dataFileBlockSize;
     }
 
@@ -156,19 +156,19 @@ public class IndexedBinaryFileConfig {
         this.dataFileInitialFileSize = dataFileInitialFileSize;
     }
 
-    public long getDataFileGrowBySize() {
-        return dataFileGrowBySize;
-    }
+//    public long getDataFileGrowBySize() {
+//        return dataFileGrowBySize;
+//    }
+//
+//    public void setDataFileGrowBySize(long dataFileGrowBySize) {
+//        this.dataFileGrowBySize = dataFileGrowBySize;
+//    }
 
-    public void setDataFileGrowBySize(long dataFileGrowBySize) {
-        this.dataFileGrowBySize = dataFileGrowBySize;
-    }
-
-    public int getIndexFileBlockSize() {
+    public long getIndexFileBlockSize() {
         return indexFileBlockSize;
     }
 
-    public void setIndexFileBlockSize(int indexFileBlockSize) {
+    public void setIndexFileBlockSize(long indexFileBlockSize) {
         this.indexFileBlockSize = indexFileBlockSize;
     }
 
@@ -180,13 +180,13 @@ public class IndexedBinaryFileConfig {
         this.indexFileInitialFileSize = indexFileInitialFileSize;
     }
 
-    public long getIndexFileGrowBySize() {
-        return indexFileGrowBySize;
-    }
-
-    public void setIndexFileGrowBySize(long indexFileGrowBySize) {
-        this.indexFileGrowBySize = indexFileGrowBySize;
-    }
+//    public long getIndexFileGrowBySize() {
+//        return indexFileGrowBySize;
+//    }
+//
+//    public void setIndexFileGrowBySize(long indexFileGrowBySize) {
+//        this.indexFileGrowBySize = indexFileGrowBySize;
+//    }
 
     public boolean isDeleteIfExists() {
         return deleteIfExists;

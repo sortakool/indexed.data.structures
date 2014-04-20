@@ -14,11 +14,10 @@
 
 package com.rsm.buffer;
 
+import com.rsm.util.ByteUnit;
 import com.rsm.util.ByteUtils;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import sun.misc.Cleaner;
-import sun.nio.ch.DirectBuffer;
 
 import java.io.File;
 import java.io.IOException;
@@ -46,42 +45,62 @@ import java.nio.channels.FileChannel.MapMode;
  *
  *  @see net.sf.kdgcommons.buffer.MappedFileBuffer
  */
-public class MappedFileBuffer
+public class NativeMappedFileBuffer
 implements Bytes, Cloneable
 {
 
-    private static final Logger log = LogManager.getLogger(MappedFileBuffer.class);
+    private static final Logger log = LogManager.getLogger(NativeMappedFileBuffer.class);
 
-//    public final static int MAX_SEGMENT_SIZE = 0x8000000; // 1 GB, assures alignment
+//    public static final long NO_PAGE = ByteUtils.UNSAFE.allocateMemory(ByteUtils.PAGE_SIZE);
+
+    public final static long DEFAULT_SEGMENT_SIZE = ByteUnit.MEGABYTE.getBytes();
 //    public final static int MAX_SEGMENT_SIZE = 0x40000000; // 1 GB, assures alignment
-    public final static int MAX_SEGMENT_SIZE = 1_073_741_824; // 1 GB, assures alignment
+    public final static int MAX_SEGMENT_SIZE = maxSegmentSize();
 
+    /**
+     * Ensure it is page aligned
+     * @return
+     */
+    private static int maxSegmentSize() {
+        final long remainder = (long) Integer.MAX_VALUE % ByteUtils.PAGE_SIZE;
+        long maxSegmentSize = Integer.MAX_VALUE - remainder;
+        return (int)maxSegmentSize;
+    }
 
-
-    public static final ByteOrder NATIVE_BYTE_ORDER = ByteOrder.nativeOrder();
 
     private File _file;
     private boolean _isWritable;
     private long _initialFileSize;
+    private long _initialSegmentSize;              // long because it's used in long expressions
     private long _segmentSize;              // long because it's used in long expressions
-    private long _growBySize;
-    private MappedByteBuffer[] _buffers;
+//    private long _growBySize;
+    private NativeMappedMemory[] _buffers;
     private long position = 0;
-    private MappedByteBuffer currentByteBuffer;
+    private NativeMappedMemory currentByteBuffer;
     private int currentIndex;
+    private final String mode;
+    private final MapMode mapMode;
     private RandomAccessFile _mappedFile;
     private FileChannel _channel;
 
     public void print(StringBuilder sb) {
-        int bufferPosition = getBufferPosition(position);
         int buffersLength = 0;
         if(_buffers != null) {
             buffersLength =  _buffers.length;
         }
+        sb.append("[position=").append(position).append(" ")
+//                .append("limit=").append(limit).append(" ")
+          .append("capacity=").append(capacity()).append(" ")
+
+          .append("segmentSize=").append(_segmentSize).append(" ")
+          .append("currentSegment=").append(currentIndex).append(" ")
+          .append("segments=").append(buffersLength)
+          .append("]")
+        ;
     }
 
-    public int getBufferPosition(long position) {
-        return (int)(position % _segmentSize);
+    public long getBufferPosition(long position) {
+        return (position % _segmentSize);
     }
 
     public String toString() {
@@ -98,10 +117,10 @@ implements Bytes, Cloneable
      *
      *  @throws IllegalArgumentException if <code>segmentSize</code> is > 1GB.
      */
-    public MappedFileBuffer(File file)
+    public NativeMappedFileBuffer(File file)
     throws IOException
     {
-        this(file, MAX_SEGMENT_SIZE, MAX_SEGMENT_SIZE, MAX_SEGMENT_SIZE, true, false);
+        this(file, DEFAULT_SEGMENT_SIZE, DEFAULT_SEGMENT_SIZE, true, false);
     }
 
 
@@ -116,10 +135,10 @@ implements Bytes, Cloneable
      *
      *  @throws IllegalArgumentException if <code>segmentSize</code> is > 1GB.
      */
-    public MappedFileBuffer(File file, boolean readWrite)
+    public NativeMappedFileBuffer(File file, boolean readWrite)
     throws IOException
     {
-        this(file, MAX_SEGMENT_SIZE, MAX_SEGMENT_SIZE, MAX_SEGMENT_SIZE, readWrite, false);
+        this(file, DEFAULT_SEGMENT_SIZE, DEFAULT_SEGMENT_SIZE, readWrite, false);
     }
 
 
@@ -137,7 +156,7 @@ implements Bytes, Cloneable
      *
      *  @throws IllegalArgumentException if <code>segmentSize</code> is > 1GB.
      */
-    public MappedFileBuffer(File file, int segmentSize, long initialFileSize, long growBySize, boolean readWrite, boolean deleteFileIfExists)
+    public NativeMappedFileBuffer(File file, long segmentSize, long initialFileSize, boolean readWrite, boolean deleteFileIfExists)
     throws IOException
     {
         if (segmentSize > MAX_SEGMENT_SIZE)
@@ -164,14 +183,20 @@ implements Bytes, Cloneable
 
         _file = file;
         _isWritable = readWrite;
-        _segmentSize = segmentSize;
+        _initialSegmentSize = segmentSize;
         _initialFileSize = initialFileSize;
-        _growBySize = growBySize;
 
+        //force to be in page_aligned units
+        final long segmentSizeRemainder = _initialSegmentSize % ByteUtils.PAGE_SIZE;
+        final long tempSegmentSize = _initialSegmentSize + segmentSizeRemainder;
+        _segmentSize = Long.min(tempSegmentSize, MAX_SEGMENT_SIZE);
+        if(_initialSegmentSize != _segmentSize) {
+            log.info("Adjusting segment size to be in page aligned units. From " + _initialSegmentSize + " to " + _segmentSize + " bytes");
+        }
         try
         {
-            String mode = readWrite ? "rw" : "r";
-            MapMode mapMode = readWrite ? MapMode.READ_WRITE : MapMode.READ_ONLY;
+            this.mode = readWrite ? "rw" : "r";
+            this.mapMode = readWrite ? MapMode.READ_WRITE : MapMode.READ_ONLY;
 
             _mappedFile = new RandomAccessFile(file, mode);
             _channel = _mappedFile.getChannel();
@@ -184,21 +209,25 @@ implements Bytes, Cloneable
                 throw new IllegalArgumentException("Invalid File Size " + fileSize);
             }
 
-            int bufArraySize = (int)(fileSize / segmentSize)
+            long bufArraySizeLong = (int)(fileSize / segmentSize)
                              + ((fileSize % segmentSize != 0) ? 1 : 0);
-            _buffers = new MappedByteBuffer[bufArraySize];
+            if(bufArraySizeLong > Integer.MAX_VALUE) {
+                throw new IllegalArgumentException(bufArraySizeLong + " segments is greater than allowed count of " + Integer.MAX_VALUE);
+            }
+            int bufArraySize = (int)bufArraySizeLong;
+            _buffers = new NativeMappedMemory[bufArraySize];
             int bufIdx = 0;
             for (long offset = 0 ; offset < fileSize ; offset += segmentSize)
             {
                 long remainingFileSize = fileSize - offset;
-//                long thisSegmentSize = Math.min(2L * segmentSize, remainingFileSize);
                 long thisSegmentSize = Math.min(segmentSize, remainingFileSize);
-                _buffers[bufIdx++] = _channel.map(mapMode, offset, thisSegmentSize);
+                final NativeMappedMemory nativeMappedMemory = NativeMappedMemory.create(thisSegmentSize);
+                _buffers[bufIdx++] = nativeMappedMemory;
             }
-            setByteOrder(NATIVE_BYTE_ORDER);
             position = 0;
-            currentByteBuffer = buffer(position);
-            currentIndex = getBuffersIndex(position);
+            processPosition();
+            //preload first segment
+            nativeMappedMemory(position);
         }
         finally
         {
@@ -209,33 +238,42 @@ implements Bytes, Cloneable
     private void grow(int index) {
         if(index >= _buffers.length) {
             long capacity = capacity();
-            long fileSize = capacity() + _growBySize;
+            long fileSize = capacity() + _segmentSize;
             long remainder = fileSize % _segmentSize;
             fileSize += remainder;
 
-            MapMode mapMode = _isWritable ? MapMode.READ_WRITE : MapMode.READ_ONLY;
+//            MapMode mapMode = _isWritable ? MapMode.READ_WRITE : MapMode.READ_ONLY;
 
-            int bufArraySize = (int)(fileSize / _segmentSize)
+            long bufArraySizeLong = (fileSize / _segmentSize)
                     + ((fileSize % _segmentSize != 0) ? 1 : 0);
-            log.info("growing buffers array size from " + _buffers.length + " to " + bufArraySize);
-            MappedByteBuffer[] temp = new MappedByteBuffer[bufArraySize];
-//            long remainingFileSize = fileSize - offset;
-//            long thisSegmentSize = Math.min(2L * _segmentSize, remainingFileSize);
+            if(bufArraySizeLong > Integer.MAX_VALUE) {
+                throw new IllegalArgumentException(bufArraySizeLong + " segments is greater than allowed count of " + Integer.MAX_VALUE);
+            }
+            int bufArraySize = (int)bufArraySizeLong;
+            log.info("growing from [segmentSize="+_segmentSize+"] [capacity="+capacity+"][numOfSegment=" + _buffers.length + "] to " +
+                    "[capacity="+fileSize+"][numOfSegments=" + bufArraySize+"]");
+            NativeMappedMemory[] temp = new NativeMappedMemory[bufArraySize];
             int bufIdx = 0;
             for (long offset = 0 ; offset < fileSize ; offset += _segmentSize)
             {
                 if(bufIdx < _buffers.length) {
                     try {
-                        map(mapMode, temp, bufIdx, offset, _segmentSize);
-                        _buffers[bufIdx].clear();
-                        temp[bufIdx].put(_buffers[bufIdx]);
+                        final NativeMappedMemory nativeMappedMemory = _buffers[bufIdx];
+                        if(nativeMappedMemory.isMapped()) {
+
+                        }
+                        else {
+                            nativeMappedMemory.release();
+                        }
+                        nativeMappedMemory.clear();
+                        temp[bufIdx] = nativeMappedMemory;
                     }
                     catch(Exception e) {
                         log.warn("Unable to memory-map file at index " + bufIdx, e);
                     }
                 }
                 else {
-                    map(mapMode, temp, bufIdx, offset, _segmentSize);
+                    map(temp, bufIdx, _segmentSize);
                 }
                 bufIdx++;
             }
@@ -243,15 +281,26 @@ implements Bytes, Cloneable
         }
     }
 
-     private void map(MapMode mapMode, MappedByteBuffer[] mappedByteBuffer, int bufIdx, long offset, long thisSegmentSize) {
+     private void map(NativeMappedMemory[] directMappedMemories, int bufIdx, long thisSegmentSize) {
          try {
-             mappedByteBuffer[bufIdx] = MapUtils.getMap(_channel, mapMode, offset, thisSegmentSize);
-             mappedByteBuffer[bufIdx].order(NATIVE_BYTE_ORDER);
+             //directMappedMemories
+             final NativeMappedMemory nativeMappedMemory = NativeMappedMemory.create(thisSegmentSize);
+             directMappedMemories[bufIdx] = nativeMappedMemory;
          }
          catch(IOException e) {
              log.warn("Unable to memory-map file at index " + bufIdx, e);
          }
      }
+
+//    private void map(MapMode mapMode, MappedByteBuffer[] mappedByteBuffer, int bufIdx, long offset, long thisSegmentSize) {
+//        try {
+//            mappedByteBuffer[bufIdx] = MapUtils.getMap(_channel, mapMode, offset, thisSegmentSize);
+//            mappedByteBuffer[bufIdx].order(ByteUtils.NATIVE_BYTE_ORDER);
+//        }
+//        catch(IOException e) {
+//            log.warn("Unable to memory-map file at index " + bufIdx, e);
+//        }
+//    }
 
     public static class MapUtils {
         public static MappedByteBuffer getMap(FileChannel fileChannel, MapMode mapMode, long start, long size) throws  IOException {
@@ -292,6 +341,18 @@ implements Bytes, Cloneable
 //----------------------------------------------------------------------------
 
 
+    public long segmentSize() {
+        return _segmentSize;
+    }
+
+    public long initialFileSize() {
+        return _initialFileSize;
+    }
+
+    public long initialSegmentSize() {
+        return _initialSegmentSize;
+    }
+
     public RandomAccessFile getRandomAccessFile() {
         return _mappedFile;
     }
@@ -304,7 +365,7 @@ implements Bytes, Cloneable
         return position;
     }
 
-    public MappedFileBuffer position(long position) {
+    public NativeMappedFileBuffer position(long position) {
         this.position = position;
         processPosition();
         return this;
@@ -360,18 +421,19 @@ implements Bytes, Cloneable
      */
     public ByteOrder getByteOrder()
     {
-        return _buffers[0].order();
+        return ByteUtils.NATIVE_BYTE_ORDER;
+//        return _buffers[0].order();
     }
 
 
-    /**
-     *  Sets the order of this buffer (propagated to all child buffers).
-     */
-    public void setByteOrder(ByteOrder order)
-    {
-        for (ByteBuffer child : _buffers)
-            child.order(order);
-    }
+//    /**
+//     *  Sets the order of this buffer (propagated to all child buffers).
+//     */
+//    public void setByteOrder(ByteOrder order)
+//    {
+//        for (ByteBuffer child : _buffers)
+//            child.order(order);
+//    }
 
     @Override
     public int getCurrentIndex() {
@@ -380,8 +442,16 @@ implements Bytes, Cloneable
 
     private void processPosition() {
         currentIndex = getBuffersIndex(position);
-        currentByteBuffer = buffer(position);
+        currentByteBuffer = nativeMappedMemory(position);
     }
+
+//    public long positionAddress() {
+//        return address(position);
+//    }
+//
+//    public long address(long index) {
+//        return currentByteBuffer.addressOffset()+index;
+//    }
 
     /* ----------------------------------------------------------------------------------------------------------------------------- */
     /* Byte                                                                                                                         */
@@ -404,7 +474,7 @@ implements Bytes, Cloneable
     @Override
     public byte get(long index) {
         long oldPosition = index;
-        final byte value = buffer(index).get();
+        final byte value = nativeMappedMemory(index).get();
         index += 1;
         processPosition();
         unmap(oldPosition, index);
@@ -427,7 +497,7 @@ implements Bytes, Cloneable
     public void put(long index, byte value)
     {
         long oldPosition = index;
-        buffer(index).put(value);
+        nativeMappedMemory(index).put(value);
         processPosition();
         unmap(oldPosition, index);
     }
@@ -451,15 +521,15 @@ implements Bytes, Cloneable
     public short getShort(ByteOrder byteOrder) {
         long oldPosition = position;
         short value = 0;
-        final int remaining = currentByteBuffer.remaining();
+        final long remaining = currentByteBuffer.remaining();
         if (remaining < 2) {
             byte short0 = 0;
             byte short1 = 0;
-            switch (remaining) {
+            switch ((int)remaining) {
                 case 1:
                     short0 = currentByteBuffer.get();
                     position += 1;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     short1 = currentByteBuffer.get();
                     position += 1;
                     break;
@@ -472,7 +542,7 @@ implements Bytes, Cloneable
         }
         processPosition();
         unmap(oldPosition, position);
-        if(NATIVE_BYTE_ORDER != byteOrder) {
+        if(ByteUtils.NATIVE_BYTE_ORDER != byteOrder) {
             value = Short.reverseBytes(value);
         }
         return value;
@@ -485,16 +555,16 @@ implements Bytes, Cloneable
     public short getShort(long index, ByteOrder byteOrder) {
         long oldPosition = index;
         short value;
-        MappedByteBuffer buffer = buffer(index);
-        final int remaining = buffer.remaining();
+        NativeMappedMemory buffer = nativeMappedMemory(index);
+        final long remaining = buffer.remaining();
         if (remaining < 2) {
             byte short0 = 0;
             byte short1 = 0;
-            switch (remaining) {
+            switch ((int)remaining) {
                 case 1:
                     short0 = buffer.get();
                     index += 1;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     short1 = buffer.get();
                     index += 1;
                     break;
@@ -507,7 +577,7 @@ implements Bytes, Cloneable
         }
         processPosition();
         unmap(oldPosition, index);
-        if(NATIVE_BYTE_ORDER != byteOrder) {
+        if(ByteUtils.NATIVE_BYTE_ORDER != byteOrder) {
             value = Short.reverseBytes(value);
         }
         return value;
@@ -527,17 +597,17 @@ implements Bytes, Cloneable
     public void putShort(long index, short value, ByteOrder byteOrder)
     {
         long oldPosition = index;
-        if(NATIVE_BYTE_ORDER != byteOrder) {
+        if(ByteUtils.NATIVE_BYTE_ORDER != byteOrder) {
             value = Short.reverseBytes(value);
         }
-        MappedByteBuffer buffer = buffer(index);
-        int remaining = buffer.remaining();
+        NativeMappedMemory buffer = nativeMappedMemory(index);
+        long remaining = buffer.remaining();
         if(remaining < 2) {
-            switch (remaining) {
+            switch ((int)remaining) {
                 case 1:
                     buffer.put(ByteUtils.short0(value));
                     index += 1;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     buffer.put(ByteUtils.short1(value));
                     index += 1;
                     break;
@@ -565,16 +635,16 @@ implements Bytes, Cloneable
     public void putShort(short value, ByteOrder byteOrder)
     {
         long oldPosition = position;
-        if(NATIVE_BYTE_ORDER != byteOrder) {
+        if(ByteUtils.NATIVE_BYTE_ORDER != byteOrder) {
             value = Short.reverseBytes(value);
         }
-        int remaining = currentByteBuffer.remaining();
+        long remaining = currentByteBuffer.remaining();
         if(remaining < 2) {
-            switch (remaining) {
+            switch ((int)remaining) {
                 case 1:
                     currentByteBuffer.put(ByteUtils.short0(value));
                     position += 1;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     currentByteBuffer.put(ByteUtils.short1(value));
                     position += 1;
                     break;
@@ -608,17 +678,17 @@ implements Bytes, Cloneable
     public int getInt(ByteOrder byteOrder) {
         long oldPosition = position;
         int value;
-        int remaining = currentByteBuffer.remaining();
+        long remaining = currentByteBuffer.remaining();
         if(remaining < 4) {
             byte int0 = 0;
             byte int1 = 0;
             byte int2 = 0;
             byte int3 = 0;
-            switch(remaining) {
+            switch((int)remaining) {
                 case 1:
                     int0 = currentByteBuffer.get();
                     position += 1;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     int1 = currentByteBuffer.get();
                     int2 = currentByteBuffer.get();
                     int3 = currentByteBuffer.get();
@@ -628,7 +698,7 @@ implements Bytes, Cloneable
                     int0 = currentByteBuffer.get();
                     int1 = currentByteBuffer.get();
                     position += 2;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     int2 = currentByteBuffer.get();
                     int3 = currentByteBuffer.get();
                     position += 2;
@@ -638,7 +708,7 @@ implements Bytes, Cloneable
                     int1 = currentByteBuffer.get();
                     int2 = currentByteBuffer.get();
                     position += 3;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     int3 = currentByteBuffer.get();
                     position += 1;
                     break;
@@ -651,7 +721,7 @@ implements Bytes, Cloneable
         }
         processPosition();
         unmap(oldPosition, position);
-        if(NATIVE_BYTE_ORDER != byteOrder) {
+        if(ByteUtils.NATIVE_BYTE_ORDER != byteOrder) {
             value = Integer.reverseBytes(value);
         }
         return value;
@@ -668,18 +738,18 @@ implements Bytes, Cloneable
     {
         long oldPosition = index;
         int value;
-        MappedByteBuffer buffer = buffer(index);
-        int remaining = buffer.remaining();
+        NativeMappedMemory buffer = nativeMappedMemory(index);
+        long remaining = buffer.remaining();
         if(remaining < 4) {
             byte int0 = 0;
             byte int1 = 0;
             byte int2 = 0;
             byte int3 = 0;
-            switch(remaining) {
+            switch((int)remaining) {
                 case 1:
                     int0 = buffer.get();
                     index += 1;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     int1 = buffer.get();
                     int2 = buffer.get();
                     int3 = buffer.get();
@@ -689,7 +759,7 @@ implements Bytes, Cloneable
                     int0 = buffer.get();
                     int1 = buffer.get();
                     index += 2;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     int2 = buffer.get();
                     int3 = buffer.get();
                     index += 2;
@@ -699,7 +769,7 @@ implements Bytes, Cloneable
                     int1 = buffer.get();
                     int2 = buffer.get();
                     index += 3;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     int3 = buffer.get();
                     index += 1;
                     break;
@@ -712,7 +782,7 @@ implements Bytes, Cloneable
         }
         processPosition();
         unmap(oldPosition, index);
-        if(NATIVE_BYTE_ORDER != byteOrder) {
+        if(ByteUtils.NATIVE_BYTE_ORDER != byteOrder) {
             value = Integer.reverseBytes(value);
         }
         return value;
@@ -725,16 +795,16 @@ implements Bytes, Cloneable
 
     public void putInt(int value, ByteOrder byteOrder) {
         long oldPosition = position;
-        if(NATIVE_BYTE_ORDER != byteOrder) {
+        if(ByteUtils.NATIVE_BYTE_ORDER != byteOrder) {
             value = Integer.reverseBytes(value);
         }
-        int remaining = currentByteBuffer.remaining();
+        long remaining = currentByteBuffer.remaining();
         if(remaining < 4) {
-            switch(remaining) {
+            switch((int)remaining) {
                 case 1:
                     currentByteBuffer.put(ByteUtils.int0(value));
                     position += 1;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     currentByteBuffer.put(ByteUtils.int1(value));
                     currentByteBuffer.put(ByteUtils.int2(value));
                     currentByteBuffer.put(ByteUtils.int3(value));
@@ -744,7 +814,7 @@ implements Bytes, Cloneable
                     currentByteBuffer.put(ByteUtils.int0(value));
                     currentByteBuffer.put(ByteUtils.int1(value));
                     position += 2;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     currentByteBuffer.put(ByteUtils.int2(value));
                     currentByteBuffer.put(ByteUtils.int3(value));
                     position += 2;
@@ -754,7 +824,7 @@ implements Bytes, Cloneable
                     currentByteBuffer.put(ByteUtils.int1(value));
                     currentByteBuffer.put(ByteUtils.int2(value));
                     position += 3;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     currentByteBuffer.put(ByteUtils.int3(value));
                     position += 1;
                     break;
@@ -781,17 +851,17 @@ implements Bytes, Cloneable
     public void putInt(long index, int value, ByteOrder byteOrder)
     {
         long oldPosition = index;
-        if(NATIVE_BYTE_ORDER != byteOrder) {
+        if(ByteUtils.NATIVE_BYTE_ORDER != byteOrder) {
             value = Integer.reverseBytes(value);
         }
-        ByteBuffer buffer = buffer(index);
-        int remaining = buffer.remaining();
+        NativeMappedMemory buffer = nativeMappedMemory(index);
+        long remaining = buffer.remaining();
         if(remaining < 4) {
-            switch(remaining) {
+            switch((int)remaining) {
                 case 1:
                     buffer.put(ByteUtils.int0(value));
                     index += 1;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     buffer.put(ByteUtils.int1(value));
                     buffer.put(ByteUtils.int2(value));
                     buffer.put(ByteUtils.int3(value));
@@ -801,7 +871,7 @@ implements Bytes, Cloneable
                     buffer.put(ByteUtils.int0(value));
                     buffer.put(ByteUtils.int1(value));
                     index += 2;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     buffer.put(ByteUtils.int2(value));
                     buffer.put(ByteUtils.int3(value));
                     index += 2;
@@ -811,7 +881,7 @@ implements Bytes, Cloneable
                     buffer.put(ByteUtils.int1(value));
                     buffer.put(ByteUtils.int2(value));
                     index += 3;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     buffer.put(ByteUtils.int3(value));
                     index += 1;
                     break;
@@ -836,7 +906,7 @@ implements Bytes, Cloneable
     public long  getLong(ByteOrder byteOrder) {
         long oldPosition = position;
         long value;
-        int remaining = currentByteBuffer.remaining();
+        long remaining = currentByteBuffer.remaining();
         if(remaining < 8) {
             byte long0 = 0;
             byte long1 = 0;
@@ -846,11 +916,11 @@ implements Bytes, Cloneable
             byte long5 = 0;
             byte long6 = 0;
             byte long7 = 0;
-            switch (remaining) {
+            switch ((int)remaining) {
                 case 1:
                     long0 = currentByteBuffer.get();
                     position += 1;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     long1 = currentByteBuffer.get();
                     long2 = currentByteBuffer.get();
                     long3 = currentByteBuffer.get();
@@ -864,7 +934,7 @@ implements Bytes, Cloneable
                     long0 = currentByteBuffer.get();
                     long1 = currentByteBuffer.get();
                     position += 2;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     long2 = currentByteBuffer.get();
                     long3 = currentByteBuffer.get();
                     long4 = currentByteBuffer.get();
@@ -878,7 +948,7 @@ implements Bytes, Cloneable
                     long1 = currentByteBuffer.get();
                     long2 = currentByteBuffer.get();
                     position += 3;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     long3 = currentByteBuffer.get();
                     long4 = currentByteBuffer.get();
                     long5 = currentByteBuffer.get();
@@ -892,7 +962,7 @@ implements Bytes, Cloneable
                     long2 = currentByteBuffer.get();
                     long3 = currentByteBuffer.get();
                     position += 4;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     long4 = currentByteBuffer.get();
                     long5 = currentByteBuffer.get();
                     long6 = currentByteBuffer.get();
@@ -906,7 +976,7 @@ implements Bytes, Cloneable
                     long3 = currentByteBuffer.get();
                     long4 = currentByteBuffer.get();
                     position += 5;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     long5 = currentByteBuffer.get();
                     long6 = currentByteBuffer.get();
                     long7 = currentByteBuffer.get();
@@ -920,7 +990,7 @@ implements Bytes, Cloneable
                     long4 = currentByteBuffer.get();
                     long5 = currentByteBuffer.get();
                     position += 6;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     long6 = currentByteBuffer.get();
                     long7 = currentByteBuffer.get();
                     position += 2;
@@ -934,7 +1004,7 @@ implements Bytes, Cloneable
                     long5 = currentByteBuffer.get();
                     long6 = currentByteBuffer.get();
                     position += 7;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     long7 = currentByteBuffer.get();
                     position += 1;
                     break;
@@ -947,7 +1017,7 @@ implements Bytes, Cloneable
         }
         processPosition();
         unmap(oldPosition, position);
-        if(NATIVE_BYTE_ORDER != byteOrder) {
+        if(ByteUtils.NATIVE_BYTE_ORDER != byteOrder) {
             value = Long.reverseBytes(value);
         }
         return value;
@@ -964,8 +1034,8 @@ implements Bytes, Cloneable
     public long  getLong(long index, ByteOrder byteOrder) {
         long oldPosition = index;
         long value;
-        MappedByteBuffer buffer = buffer(index);
-        int remaining = buffer.remaining();
+        NativeMappedMemory buffer = nativeMappedMemory(index);
+        long remaining = buffer.remaining();
         if(remaining < 8) {
             byte long0 = 0;
             byte long1 = 0;
@@ -975,11 +1045,11 @@ implements Bytes, Cloneable
             byte long5 = 0;
             byte long6 = 0;
             byte long7 = 0;
-            switch (remaining) {
+            switch ((int)remaining) {
                 case 1:
                     long0 = buffer.get();
                     index += 1;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     long1 = buffer.get();
                     long2 = buffer.get();
                     long3 = buffer.get();
@@ -993,7 +1063,7 @@ implements Bytes, Cloneable
                     long0 = buffer.get();
                     long1 = buffer.get();
                     index += 2;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     long2 = buffer.get();
                     long3 = buffer.get();
                     long4 = buffer.get();
@@ -1007,7 +1077,7 @@ implements Bytes, Cloneable
                     long1 = buffer.get();
                     long2 = buffer.get();
                     index += 3;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     long3 = buffer.get();
                     long4 = buffer.get();
                     long5 = buffer.get();
@@ -1021,7 +1091,7 @@ implements Bytes, Cloneable
                     long2 = buffer.get();
                     long3 = buffer.get();
                     index += 4;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     long4 = buffer.get();
                     long5 = buffer.get();
                     long6 = buffer.get();
@@ -1035,7 +1105,7 @@ implements Bytes, Cloneable
                     long3 = buffer.get();
                     long4 = buffer.get();
                     index += 5;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     long5 = buffer.get();
                     long6 = buffer.get();
                     long7 = buffer.get();
@@ -1049,7 +1119,7 @@ implements Bytes, Cloneable
                     long4 = buffer.get();
                     long5 = buffer.get();
                     index += 6;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     long6 = buffer.get();
                     long7 = buffer.get();
                     index += 2;
@@ -1063,7 +1133,7 @@ implements Bytes, Cloneable
                     long5 = buffer.get();
                     long6 = buffer.get();
                     index += 7;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     long7 = buffer.get();
                     index += 1;
                     break;
@@ -1076,7 +1146,7 @@ implements Bytes, Cloneable
         }
         processPosition();
         unmap(oldPosition, index);
-        if(NATIVE_BYTE_ORDER != byteOrder) {
+        if(ByteUtils.NATIVE_BYTE_ORDER != byteOrder) {
             value = Long.reverseBytes(value);
         }
         return value;
@@ -1092,16 +1162,16 @@ implements Bytes, Cloneable
     public void putLong(long value, ByteOrder byteOrder)
     {
         long oldPosition = position;
-        if(NATIVE_BYTE_ORDER != byteOrder) {
+        if(ByteUtils.NATIVE_BYTE_ORDER != byteOrder) {
             value = Long.reverseBytes(value);
         }
-        int remaining = currentByteBuffer.remaining();
+        long remaining = currentByteBuffer.remaining();
         if(remaining < 8) {
-            switch(remaining) {
+            switch((int)remaining) {
                 case 1:
                     currentByteBuffer.put(ByteUtils.long0(value));
                     position += 1;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     currentByteBuffer.put(ByteUtils.long1(value));
                     currentByteBuffer.put(ByteUtils.long2(value));
                     currentByteBuffer.put(ByteUtils.long3(value));
@@ -1115,7 +1185,7 @@ implements Bytes, Cloneable
                     currentByteBuffer.put(ByteUtils.long0(value));
                     currentByteBuffer.put(ByteUtils.long1(value));
                     position += 2;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     currentByteBuffer.put(ByteUtils.long2(value));
                     currentByteBuffer.put(ByteUtils.long3(value));
                     currentByteBuffer.put(ByteUtils.long4(value));
@@ -1129,7 +1199,7 @@ implements Bytes, Cloneable
                     currentByteBuffer.put(ByteUtils.long1(value));
                     currentByteBuffer.put(ByteUtils.long2(value));
                     position += 3;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     currentByteBuffer.put(ByteUtils.long3(value));
                     currentByteBuffer.put(ByteUtils.long4(value));
                     currentByteBuffer.put(ByteUtils.long5(value));
@@ -1143,7 +1213,7 @@ implements Bytes, Cloneable
                     currentByteBuffer.put(ByteUtils.long2(value));
                     currentByteBuffer.put(ByteUtils.long3(value));
                     position += 4;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     currentByteBuffer.put(ByteUtils.long4(value));
                     currentByteBuffer.put(ByteUtils.long5(value));
                     currentByteBuffer.put(ByteUtils.long6(value));
@@ -1157,7 +1227,7 @@ implements Bytes, Cloneable
                     currentByteBuffer.put(ByteUtils.long3(value));
                     currentByteBuffer.put(ByteUtils.long4(value));
                     position += 5;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     currentByteBuffer.put(ByteUtils.long5(value));
                     currentByteBuffer.put(ByteUtils.long6(value));
                     currentByteBuffer.put(ByteUtils.long7(value));
@@ -1171,7 +1241,7 @@ implements Bytes, Cloneable
                     currentByteBuffer.put(ByteUtils.long4(value));
                     currentByteBuffer.put(ByteUtils.long5(value));
                     position += 6;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     currentByteBuffer.put(ByteUtils.long6(value));
                     currentByteBuffer.put(ByteUtils.long7(value));
                     position += 2;
@@ -1185,7 +1255,7 @@ implements Bytes, Cloneable
                     currentByteBuffer.put(ByteUtils.long5(value));
                     currentByteBuffer.put(ByteUtils.long6(value));
                     position += 7;
-                    currentByteBuffer = buffer(position);
+                    currentByteBuffer = nativeMappedMemory(position);
                     currentByteBuffer.put(ByteUtils.long7(value));
                     position += 1;
                     break;
@@ -1214,17 +1284,17 @@ implements Bytes, Cloneable
     public void putLong(long index, long value, ByteOrder byteOrder)
     {
         long oldPosition = index;
-        if(NATIVE_BYTE_ORDER != byteOrder) {
+        if(ByteUtils.NATIVE_BYTE_ORDER != byteOrder) {
             value = Long.reverseBytes(value);
         }
-        ByteBuffer buffer = buffer(index);
-        int remaining = buffer.remaining();
+        NativeMappedMemory buffer = nativeMappedMemory(index);
+        long remaining = buffer.remaining();
         if(remaining < 8) {
-            switch(remaining) {
+            switch((int)remaining) {
                 case 1:
                     buffer.put(ByteUtils.long0(value));
                     index += 1;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     buffer.put(ByteUtils.long1(value));
                     buffer.put(ByteUtils.long2(value));
                     buffer.put(ByteUtils.long3(value));
@@ -1238,7 +1308,7 @@ implements Bytes, Cloneable
                     buffer.put(ByteUtils.long0(value));
                     buffer.put(ByteUtils.long1(value));
                     index += 2;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     buffer.put(ByteUtils.long2(value));
                     buffer.put(ByteUtils.long3(value));
                     buffer.put(ByteUtils.long4(value));
@@ -1252,7 +1322,7 @@ implements Bytes, Cloneable
                     buffer.put(ByteUtils.long1(value));
                     buffer.put(ByteUtils.long2(value));
                     index += 3;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     buffer.put(ByteUtils.long3(value));
                     buffer.put(ByteUtils.long4(value));
                     buffer.put(ByteUtils.long5(value));
@@ -1266,7 +1336,7 @@ implements Bytes, Cloneable
                     buffer.put(ByteUtils.long2(value));
                     buffer.put(ByteUtils.long3(value));
                     index += 4;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     buffer.put(ByteUtils.long4(value));
                     buffer.put(ByteUtils.long5(value));
                     buffer.put(ByteUtils.long6(value));
@@ -1280,7 +1350,7 @@ implements Bytes, Cloneable
                     buffer.put(ByteUtils.long3(value));
                     buffer.put(ByteUtils.long4(value));
                     index += 5;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     buffer.put(ByteUtils.long5(value));
                     buffer.put(ByteUtils.long6(value));
                     buffer.put(ByteUtils.long7(value));
@@ -1294,7 +1364,7 @@ implements Bytes, Cloneable
                     buffer.put(ByteUtils.long4(value));
                     buffer.put(ByteUtils.long5(value));
                     index += 6;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     buffer.put(ByteUtils.long6(value));
                     buffer.put(ByteUtils.long7(value));
                     index += 2;
@@ -1308,7 +1378,7 @@ implements Bytes, Cloneable
                     buffer.put(ByteUtils.long5(value));
                     buffer.put(ByteUtils.long6(value));
                     index += 7;
-                    buffer = buffer(index);
+                    buffer = nativeMappedMemory(index);
                     buffer.put(ByteUtils.long7(value));
                     index += 1;
                     break;
@@ -1536,9 +1606,11 @@ implements Bytes, Cloneable
     {
         while (len > 0)
         {
-            ByteBuffer buf = buffer(index);
-            int count = Math.min(len, buf.remaining());
-            buf.get(array, off, count);
+            NativeMappedMemory buf = nativeMappedMemory(index);
+            int count = Math.min(len, remainingAsInt(buf));
+            final long bufferPosition = getBufferPosition(index);
+            final int returnedCount = buf.getBytes(bufferPosition, array, off, count);
+            assert (count == returnedCount);
             index += count;
             off += count;
             len -= count;
@@ -1551,14 +1623,21 @@ implements Bytes, Cloneable
     {
         while (len > 0)
         {
-            ByteBuffer buf = currentByteBuffer;
-            int count = Math.min(len, buf.remaining());
-            buf.get(array, off, count);
+            NativeMappedMemory buf = nativeMappedMemory(position);
+            int count = Math.min(len, remainingAsInt(buf));
+            final long bufferPosition = getBufferPosition(position);
+            final int returnedCount = buf.getBytes(bufferPosition, array, off, count);
+            assert (count == returnedCount);
+            position += count;
             off += count;
             len -= count;
         }
         processPosition();
         return array;
+    }
+
+    private int remainingAsInt(NativeMappedMemory buf) {
+        return (int)Math.min(Integer.MAX_VALUE, buf.remaining());
     }
 
 //    public ByteArraySlice getBytes(long index, ByteArraySlice destination, long offset, long length) {
@@ -1585,15 +1664,12 @@ implements Bytes, Cloneable
     {
         while (len > 0)
         {
-            currentByteBuffer = buffer(position);
-            int count = Math.min(len, currentByteBuffer.remaining());
-//            buf.put(destination);
-//            destination.put(buf);
-            for(int i=0; i< count; i++) {
-                destination.put(currentByteBuffer.get());
-            }
+            currentByteBuffer = nativeMappedMemory(position);
+            int count = Math.min(len, remainingAsInt(currentByteBuffer));
+            final long bufferPosition = getBufferPosition(position);
+            final int returnedCount = currentByteBuffer.getBytes(bufferPosition, destination, count);
+            assert (count == returnedCount);
             position += count;
-            currentByteBuffer = buffer(position);
             len -= count;
         }
         processPosition();
@@ -1619,12 +1695,11 @@ implements Bytes, Cloneable
         long initialPosition = index;
         while (len > 0)
         {
-            ByteBuffer buf = buffer(index);
-            int count = Math.min(len, buf.remaining());
-            for(int i=0; i< count; i++) {
-                assert(destination.remaining() != 0);
-                destination.put(buf.get());
-            }
+            NativeMappedMemory buf = nativeMappedMemory(index);
+            int count = Math.min(len, remainingAsInt(buf));
+            final long bufferPosition = getBufferPosition(index);
+            final int returnedCount = buf.getBytes(bufferPosition, destination, count);
+            assert (count == returnedCount);
             index += count;
             len -= count;
         }
@@ -1642,13 +1717,12 @@ implements Bytes, Cloneable
     {
         while (len > 0)
         {
-            currentByteBuffer = buffer(position);
-            int count = Math.min(len, currentByteBuffer.remaining());
-            for(int i=0; i< count; i++) {
-                currentByteBuffer.put(source.get());
-            }
+            currentByteBuffer = nativeMappedMemory(position);
+            int count = Math.min(len, remainingAsInt(currentByteBuffer));
+            final long bufferPosition = getBufferPosition(position);
+            final int returnedCount = currentByteBuffer.putBytes(bufferPosition, source, count);
+            assert (count == returnedCount);
             position += count;
-            currentByteBuffer = buffer(position);
             len -= count;
         }
         processPosition();
@@ -1663,11 +1737,11 @@ implements Bytes, Cloneable
     {
         while (len > 0)
         {
-            ByteBuffer buf = buffer(index);
-            int count = Math.min(len, buf.remaining());
-            for(int i=0; i< count; i++) {
-                buf.put(source.get());
-            }
+            NativeMappedMemory buf = nativeMappedMemory(index);
+            int count = Math.min(len, remainingAsInt(buf));
+            final long bufferPosition = getBufferPosition(index);
+            final int returnedCount = buf.putBytes(bufferPosition, source, count);
+            assert (count == returnedCount);
             index += count;
             len -= count;
         }
@@ -1701,9 +1775,11 @@ implements Bytes, Cloneable
     {
         while (len > 0)
         {
-            ByteBuffer buf = buffer(index);
-            int count = Math.min(len, buf.remaining());
-            buf.put(value, off, count);
+            NativeMappedMemory buf = nativeMappedMemory(index);
+            int count = Math.min(len, remainingAsInt(buf));
+            final long bufferPosition = getBufferPosition(index);
+            final int returnedCount = buf.putBytes(bufferPosition, value, off, count);
+            assert (count == returnedCount);
             index += count;
             off += count;
             len -= count;
@@ -1711,6 +1787,156 @@ implements Bytes, Cloneable
         processPosition();
     }
 
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
+    /* NativeMappedMemory                                                                                                                         */
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
+
+    public NativeMappedMemory getBytes(NativeMappedMemory destination)
+    {
+        final long destinationPosition = destination.position();
+        final long length = destination.remaining();
+        final NativeMappedMemory bytes = getBytes(destination, destinationPosition, length);
+        destination.position(destinationPosition+length);
+        return bytes;
+    }
+
+    public NativeMappedMemory getBytes(NativeMappedMemory destination, long length)
+    {
+        final long destinationPosition = destination.position();
+        final NativeMappedMemory bytes = getBytes(destination, destinationPosition, length);
+        destination.position(destinationPosition+length);
+        return bytes;
+    }
+
+    /**
+     *  Retrieves <code>len</code> bytes starting at the specified index,
+     *  storing them in an existing <code>byte[]</code> at the specified
+     *  offset. Returns the array as a convenience. Will span segments as
+     *  needed.
+     *
+     *  @throws IndexOutOfBoundsException if the request would read past
+     *          the end of file.
+     */
+    public NativeMappedMemory getBytes(NativeMappedMemory destination, long destinationPosition, long len)
+    {
+        while (len > 0)
+        {
+            currentByteBuffer = nativeMappedMemory(position);
+            long count = Math.min(len, currentByteBuffer.remaining());
+            final long bufferPosition = getBufferPosition(position);
+            final long returnedCount = currentByteBuffer.getBytes(bufferPosition, destination, destinationPosition, count);
+            assert (count == returnedCount);
+            destinationPosition += count;
+            position += count;
+            len -= count;
+        }
+        processPosition();
+        return destination;
+    }
+
+    public NativeMappedMemory getBytes(long index, NativeMappedMemory destination)
+    {
+        final long destinationPosition = destination.position();
+        final long length = destination.remaining();
+        final NativeMappedMemory bytes = getBytes(index, destination, destinationPosition, length);
+        destination.position(destinationPosition+length);
+        return bytes;
+    }
+
+    public NativeMappedMemory getBytes(long index, NativeMappedMemory destination, long length)
+    {
+        final long destinationPosition = destination.position();
+        final NativeMappedMemory bytes = getBytes(index, destination, destinationPosition, length);
+        destination.position(destinationPosition+length);
+        return bytes;
+    }
+
+    public NativeMappedMemory getBytes(long index, NativeMappedMemory destination, long destinationPosition, long len)
+    {
+        long initialPosition = index;
+        while (len > 0)
+        {
+            NativeMappedMemory buf = nativeMappedMemory(index);
+            long count = Math.min(len, buf.remaining());
+            final long bufferPosition = getBufferPosition(index);
+            final long returnedCount = buf.getBytes(bufferPosition, destination, destinationPosition, count);
+            assert (count == returnedCount);
+            index += count;
+            len -= count;
+        }
+        processPosition();
+        unmap(initialPosition, index);
+        return destination;
+    }
+
+    public NativeMappedMemory putBytes(NativeMappedMemory source)
+    {
+        final long sourcePosition = source.position();
+        final long length = source.remaining();
+        final NativeMappedMemory bytes = putBytes(source, sourcePosition, length);
+        source.position(sourcePosition+length);
+        return bytes;
+    }
+
+    public NativeMappedMemory putBytes(NativeMappedMemory source, long length)
+    {
+        final long sourcePosition = source.position();
+        final NativeMappedMemory bytes = putBytes(source, sourcePosition, length);
+        source.position(sourcePosition+length);
+        return bytes;
+    }
+
+    public NativeMappedMemory putBytes(NativeMappedMemory source, long sourcePosition, long length)
+    {
+        while (length > 0)
+        {
+            currentByteBuffer = nativeMappedMemory(position);
+            long count = Math.min(length, currentByteBuffer.remaining());
+            final long bufferPosition = getBufferPosition(position);
+            final long returnedCount = currentByteBuffer.putBytes(bufferPosition, source, sourcePosition, count);
+            assert (count == returnedCount);
+            sourcePosition += count;
+            position += count;
+            length -= count;
+        }
+        processPosition();
+        return source;
+    }
+
+    public NativeMappedMemory putBytes(long index, NativeMappedMemory source)
+    {
+        final long sourcePosition = source.position();
+        final long length = source.remaining();
+        final NativeMappedMemory bytes = putBytes(index, source, sourcePosition, length);
+        source.position(sourcePosition+length);
+        return bytes;
+    }
+
+    public NativeMappedMemory putBytes(long index, NativeMappedMemory source, long length)
+    {
+        final long sourcePosition = source.position();
+        final NativeMappedMemory bytes = putBytes(index, source, sourcePosition, length);
+        source.position(sourcePosition+length);
+        return bytes;
+    }
+
+    public NativeMappedMemory putBytes(long index, NativeMappedMemory source, long sourcePosition, long length)
+    {
+        while (length > 0)
+        {
+            NativeMappedMemory buf = nativeMappedMemory(index);
+            long count = Math.min(length, buf.remaining());
+            final long bufferPosition = getBufferPosition(index);
+            final long returnedCount = buf.putBytes(bufferPosition, source, sourcePosition, count);
+//            buf.force();
+            assert (count == returnedCount);
+            sourcePosition += count;
+            index += count;
+            length -= count;
+        }
+        processPosition();
+        return source;
+    }
 
     /**
      *  Creates a new buffer, whose size will be >= segment size, starting at
@@ -1730,30 +1956,35 @@ implements Bytes, Cloneable
      */
     public void force()
     {
-        for (MappedByteBuffer buf : _buffers) {
-            buf.force();
+        for (NativeMappedMemory buf : _buffers) {
+            if(buf.isMapped()) {
+                buf.force();
+            }
         }
     }
 
 
     /**
+     * TODO implement
      *  Creates a new buffer referencing the same file, but with a copy of the
      *  original underlying mappings. The new and old buffers may be accessed
      *  by different threads.
      */
     @Override
-    public MappedFileBuffer clone()
+    public NativeMappedFileBuffer clone()
     {
         try
         {
-            MappedFileBuffer that = (MappedFileBuffer)super.clone();
-            that._buffers = new MappedByteBuffer[_buffers.length];
+            NativeMappedFileBuffer that = (NativeMappedFileBuffer)super.clone();
+            that._buffers = new NativeMappedMemory[_buffers.length];
             for (int ii = 0 ; ii < _buffers.length ; ii++)
             {
                 // if the file is a multiple of the segment size, we
                 // can end up with an empty slot in the buffer array
-                if (_buffers[ii] != null)
-                    that._buffers[ii] = (MappedByteBuffer)_buffers[ii].duplicate();
+                if (_buffers[ii] != null) {
+                    //TODO implement
+//                    that._buffers[ii] = (NativeMappedMemory)_buffers[ii].duplicate();
+                }
             }
             return that;
         }
@@ -1780,31 +2011,72 @@ implements Bytes, Cloneable
 //  Internals
 //----------------------------------------------------------------------------
 
-    // this is exposed for a white-box test of cloning
-    public MappedByteBuffer buffer(long filePosition)
+    public NativeMappedMemory nativeMappedMemory(long filePosition)
     {
-        int newCurrentPosition = getBufferPosition(filePosition);
+        long newCurrentPosition = getBufferPosition(filePosition);
         int bufferIndex = getBuffersIndex(filePosition);
         grow(bufferIndex);
-        MappedByteBuffer buf = _buffers[bufferIndex];
+        NativeMappedMemory buf = _buffers[bufferIndex];
+        mapIfNecessary(buf, bufferIndex);
         buf.position(newCurrentPosition);
         assert (buf.remaining() != 0);
         assert(buf.order() == ByteOrder.nativeOrder());
+        assert(buf.isMapped());
         return buf;
     }
 
-    private void unmap(long oldPosition, long newPosition) {
-//        int oldIndex = getBuffersIndex(oldPosition);
-//        int newIndex = getBuffersIndex(newPosition);
-//        for(int i=oldIndex; i<newIndex; i++) {
-//            unmap(_buffers[i]);
-//        }
+    private NativeMappedMemory mapIfNecessary(NativeMappedMemory nativeMappedMemory, int bufferIndex) {
+        if(!nativeMappedMemory.isMapped()) {
+            try {
+                long startPosition = bufferIndex*_segmentSize;
+                MappedByteBuffer mappedByteBuffer = MapUtils.getMap(_channel, mapMode, startPosition, _segmentSize);
+                if(!mappedByteBuffer.isLoaded()) {
+                    mappedByteBuffer = mappedByteBuffer.load();
+                }
+                return nativeMappedMemory.wrap(mappedByteBuffer);
+            }
+            catch (IOException e) {
+                long filePosition = bufferIndex * _segmentSize;
+                throw new RuntimeException("Unable to remap at [filePosition="+filePosition+"][bufferIndex="+bufferIndex+"]", e);
+            }
+        }
+        return nativeMappedMemory;
     }
 
-    private static void unmap(MappedByteBuffer bb) {
-        Cleaner cl = ((DirectBuffer) bb).cleaner();
-        if (cl != null) {
-            cl.clean();
+//    private NativeMappedMemory mapSegment(final NativeMappedMemory nativeMappedMemory, int buffersIndex) throws IOException {
+//        long startPosition = buffersIndex*_segmentSize;
+//        final MappedByteBuffer mappedByteBuffer = MapUtils.getMap(_channel, mapMode, startPosition, _segmentSize);
+//        mapIfNecessary(nativeMappedMemory, buffersIndex);
+//        return nativeMappedMemory.wrap(mappedByteBuffer);
+//    }
+
+    // this is exposed for a white-box test of cloning
+    public MappedByteBuffer buffer(long filePosition)
+    {
+        return nativeMappedMemory(filePosition).buffer();
+//        long newCurrentPosition = getBufferPosition(filePosition);
+//        int bufferIndex = getBuffersIndex(filePosition);
+//        grow(bufferIndex);
+//        MappedByteBuffer buf = _buffers[bufferIndex].buffer();
+//        buf.position((int)newCurrentPosition);
+//        assert (buf.remaining() != 0);
+//        assert(buf.order() == ByteOrder.nativeOrder());
+//        return buf;
+    }
+
+    private void unmap(long oldPosition, long newPosition) {
+        int oldIndex = getBuffersIndex(oldPosition);
+        int newIndex = getBuffersIndex(newPosition);
+        for(int i=oldIndex; i<newIndex; i++) {
+            unmap(_buffers[i]);
+        }
+    }
+
+    private static void unmap(NativeMappedMemory nativeMappedMemory) {
+        if((nativeMappedMemory != null) && nativeMappedMemory.isMapped()) {
+            nativeMappedMemory.force();
+            final boolean released = nativeMappedMemory.release();
+            assert(released == true) : "Unable to release " + nativeMappedMemory;
         }
     }
 }

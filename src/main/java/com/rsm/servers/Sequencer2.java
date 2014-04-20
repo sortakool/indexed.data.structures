@@ -9,13 +9,11 @@ import com.rsm.message.nasdaq.binaryfile.IndexedBinaryFileConfig;
 import com.rsm.message.nasdaq.itch.v4_1.*;
 import com.rsm.message.nasdaq.moldudp.MoldUDPUtil;
 import com.rsm.util.ByteUtils;
-import net.openhft.chronicle.ChronicleConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import uk.co.real_logic.sbe.codec.java.DirectBuffer;
 import uk.co.real_logic.sbe.util.BitUtil;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
@@ -26,7 +24,6 @@ import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.util.Enumeration;
-import java.util.Iterator;
 
 /**
  * Created by rmanaloto on 3/19/14.
@@ -41,7 +38,7 @@ public class Sequencer2 {
     public static final String EVENT_MULTICAST_IP = "FF02:0:0:0:0:0:0:4";
     public static final int EVENT_MULTICAST_PORT = 9001;
 
-    private final int logModCount = 1_000_000;
+    private final int logModCount = 5_000_000;
 
     DatagramChannel commandChannel = null;
     MembershipKey commandMembershipKey = null;
@@ -408,21 +405,21 @@ public class Sequencer2 {
 
         String indexFileSuffix = "index";
         String dataFileSuffix = "data";
-        final int one_gb = 1_073_741_824;
-        final int maxSegmentSize = MappedFileBuffer.MAX_SEGMENT_SIZE;
-        int dataFileBlockSize = MappedFileBuffer.MAX_SEGMENT_SIZE;
-        long dataFileInitialFileSize = MappedFileBuffer.MAX_SEGMENT_SIZE;
-        long dataFileGrowBySize = MappedFileBuffer.MAX_SEGMENT_SIZE;
+//        final int one_gb = 1_073_741_824;
+        final long maxSegmentSize = MappedFileBuffer.MAX_SEGMENT_SIZE;
+        long dataFileBlockSize = MappedFileBuffer.MAX_SEGMENT_SIZE;
+        long dataFileInitialFileSize = ((long)MappedFileBuffer.MAX_SEGMENT_SIZE)*50L;
+//        long dataFileGrowBySize = MappedFileBuffer.MAX_SEGMENT_SIZE;
 
-        int indexFileBlockSize = BitUtil.SIZE_OF_LONG*2*1_000_000; //accomodate 1,000,000 entries
-        long indexFileInitialFileSize = BitUtil.SIZE_OF_LONG*50*1_000_000; //accomodate 1,000,000,000 entries
-        long indexFileGrowBySize = BitUtil.SIZE_OF_LONG*2*1_000_000; //accomodate 1,000,000 entries
+        long indexFileBlockSize = ((long)BitUtil.SIZE_OF_LONG)*2L*1_000_000L; //accomodate 1,000,000 entries
+        long indexFileInitialFileSize = ((long)BitUtil.SIZE_OF_LONG)*2L*50L*1_000_000L; //accomodate 1,000,000,000 entries
+//        long indexFileGrowBySize = BitUtil.SIZE_OF_LONG*2*1_000_000; //accomodate 1,000,000 entries
         boolean deleteIfExists = true;
         ByteOrder byteOrder = ByteOrder.BIG_ENDIAN;
 
         IndexedBinaryFileConfig config = new IndexedBinaryFileConfig(absoluteDirectoryPath, baseFileName, indexFileSuffix, dataFileSuffix,
 //                Path directoryPathPath, Path dataFilePath, Path indexFilePath, File dataFile, File indexFile,
-                byteOrder, dataFileBlockSize, dataFileInitialFileSize, dataFileGrowBySize, indexFileBlockSize, indexFileInitialFileSize, indexFileGrowBySize, deleteIfExists);
+                byteOrder, dataFileBlockSize, dataFileInitialFileSize, indexFileBlockSize, indexFileInitialFileSize, deleteIfExists);
         return config;
     }
 }

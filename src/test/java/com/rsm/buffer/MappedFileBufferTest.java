@@ -101,12 +101,10 @@ public class MappedFileBufferTest {
         FileSystem fileSystem = FileSystems.getDefault();
         Path path = fileSystem.getPath(System.getProperty("user.home") + "/Downloads/11092013.NASDAQ_ITCH41");
         File file = path.toFile();
-        long fileSize = file.length();
         String absolutePath = file.getAbsolutePath();
         final MappedFileBuffer mappedFile = createMappedFileBuffer(absolutePath, segmentSize, initialFileSize, growBySize, true, false);
 
         long position = segmentSize-1;
-        short testShort = 666;
         short returnedShort;
 
         mappedFile.position(position);
@@ -256,8 +254,6 @@ public class MappedFileBufferTest {
             Assert.assertEquals(testDouble, returnedDouble, 0.0D);
         }
     }
-
-
 
     @Test
     public void testByteBuffer() throws Exception {

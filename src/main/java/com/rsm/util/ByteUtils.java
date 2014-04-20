@@ -19,6 +19,9 @@ public abstract class ByteUtils {
     public static final ByteOrder NATIVE_BYTE_ORDER = ByteOrder.nativeOrder();
     public static final Unsafe UNSAFE = BitUtil.getUnsafe();
     public static final long BYTE_ARRAY_OFFSET = UNSAFE.arrayBaseOffset(byte[].class);
+    public static final long PAGE_SIZE = UNSAFE.pageSize();
+
+
 
     public static byte[] fillWithSpaces(byte[] byteArray) {
         Arrays.fill(byteArray, SPACE);

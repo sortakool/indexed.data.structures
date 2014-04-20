@@ -1,9 +1,9 @@
 package com.rsm.message.nasdaq.binaryfile;
 
 import com.rsm.buffer.MappedFileBuffer;
+import com.rsm.buffer.NativeMappedFileBuffer;
 import com.rsm.message.nasdaq.itch.v4_1.ITCHMessageType;
 import com.rsm.message.nasdaq.moldudp.MoldUDPUtil;
-import com.rsm.util.ByteUtils;
 import net.openhft.chronicle.ChronicleConfig;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -37,35 +37,33 @@ public class IndexedBinaryFile {
 
     private final ByteOrder byteOrder;
 
-    private final int dataFileBlockSize;
+    private final long dataFileBlockSize;
     private final long dataFileInitialFileSize;
-    private final long dataFileGrowBySize;
 
-    private final int indexFileBlockSize;
+    private final long indexFileBlockSize;
     private final long indexFileInitialFileSize;
-    private final long indexFileGrowBySize;
 
     private final boolean deleteIfExists;
 
-    private final MappedFileBuffer dataMappedFile;
-    private final MappedFileBuffer indexMappedFile;
+    private final NativeMappedFileBuffer dataMappedFile;
+    private final NativeMappedFileBuffer indexMappedFile;
 
     public IndexedBinaryFile(String directoryPath, String baseFileName,
-                             int dataFileBlockSize, long dataFileInitialFileSize, long dataFileGrowBySize,
-                             int indexFileBlockSize, long indexFileInitialFileSize, long indexFileGrowBySize,
+                             long dataFileBlockSize, long dataFileInitialFileSize,
+                             long indexFileBlockSize, long indexFileInitialFileSize,
                              boolean deleteIfExists,
                              ByteOrder byteOrder) throws IOException {
         this(directoryPath, baseFileName, "idx", "dat",
-                dataFileBlockSize, dataFileInitialFileSize, dataFileGrowBySize,
-                indexFileBlockSize, indexFileInitialFileSize, indexFileGrowBySize,
+                dataFileBlockSize, dataFileInitialFileSize,
+                indexFileBlockSize, indexFileInitialFileSize,
                 deleteIfExists,
                 byteOrder
                 );
     }
 
     public IndexedBinaryFile(String directoryPath, String baseFileName, String indexFileSuffix, String dataFileSuffix,
-                             int dataFileBlockSize, long dataFileInitialFileSize, long dataFileGrowBySize,
-                             int indexFileBlockSize, long indexFileInitialFileSize, long indexFileGrowBySize,
+                             long dataFileBlockSize, long dataFileInitialFileSize,
+                             long indexFileBlockSize, long indexFileInitialFileSize,
                              boolean deleteIfExists,
                              ByteOrder byteOrder) throws IOException {
         this.directoryPath = directoryPath;
@@ -75,11 +73,9 @@ public class IndexedBinaryFile {
 
         this.dataFileBlockSize = dataFileBlockSize;
         this.dataFileInitialFileSize = dataFileInitialFileSize;
-        this.dataFileGrowBySize = dataFileGrowBySize;
 
         this.indexFileBlockSize = indexFileBlockSize;
         this.indexFileInitialFileSize = indexFileInitialFileSize;
-        this.indexFileGrowBySize = indexFileGrowBySize;
 
         this.byteOrder = byteOrder;
         this.deleteIfExists = deleteIfExists;
@@ -91,10 +87,10 @@ public class IndexedBinaryFile {
         this.indexFilePath = Paths.get(directoryPath, baseFileName + "." + indexFileSuffix);
         this.indexFile = this.indexFilePath.toFile();
 
-        dataMappedFile = new MappedFileBuffer(dataFile, this.dataFileBlockSize, this.dataFileInitialFileSize, this.dataFileGrowBySize, true, deleteIfExists);
+        dataMappedFile = new NativeMappedFileBuffer(dataFile, this.dataFileBlockSize, this.dataFileInitialFileSize, true, deleteIfExists);
 //        dataMappedFile.setByteOrder(byteOrder);
 
-        indexMappedFile = new MappedFileBuffer(indexFile, this.indexFileBlockSize, this.indexFileInitialFileSize, this.indexFileGrowBySize, true, deleteIfExists);
+        indexMappedFile = new NativeMappedFileBuffer(indexFile, this.indexFileBlockSize, this.indexFileInitialFileSize, true, deleteIfExists);
 //        indexMappedFile.setByteOrder(byteOrder);
 
         initialize();
@@ -102,8 +98,8 @@ public class IndexedBinaryFile {
 
     public IndexedBinaryFile(IndexedBinaryFileConfig config) throws IOException {
         this(config.getDirectoryPath(), config.getBaseFileName(), config.getIndexFileSuffix(), config.getDataFileSuffix(),
-                config.getDataFileBlockSize(), config.getDataFileInitialFileSize(), config.getDataFileGrowBySize(),
-                config.getIndexFileBlockSize(), config.getIndexFileInitialFileSize(), config.getIndexFileGrowBySize(),
+                config.getDataFileBlockSize(), config.getDataFileInitialFileSize(),
+                config.getIndexFileBlockSize(), config.getIndexFileInitialFileSize(),
                 config.isDeleteIfExists(),
                 config.getByteOrder())
         ;
@@ -219,18 +215,16 @@ public class IndexedBinaryFile {
         String dataFileSuffix = "data";
         int dataFileBlockSize = ChronicleConfig.SMALL.dataBlockSize();
         long dataFileInitialFileSize = binaryFileLength;
-        long dataFileGrowBySize = ChronicleConfig.SMALL.dataBlockSize();
 
         int indexFileBlockSize = BitUtil.SIZE_OF_LONG*2*1_000_000; //accomodate 1,000,000 entries
         long indexFileInitialFileSize = BitUtil.SIZE_OF_LONG*2*50_000_000; //accomodate 50,000,000,000 entries
-        long indexFileGrowBySize = BitUtil.SIZE_OF_LONG*2*1_000_000; //accomodate 1,000,000 entries
         boolean deleteIfExists = true;
         ByteOrder byteOrder = ByteOrder.BIG_ENDIAN;
 
         IndexedBinaryFile indexedBinaryFile = new IndexedBinaryFile(absoluteDirectoryPath, baseFileName, indexFileSuffix, dataFileSuffix,
-                                                    dataFileBlockSize, dataFileInitialFileSize, dataFileGrowBySize,
-                                                    indexFileBlockSize, indexFileInitialFileSize, indexFileGrowBySize,
-                                                    deleteIfExists,
+                                                    dataFileBlockSize, dataFileInitialFileSize,
+                indexFileBlockSize, indexFileInitialFileSize,
+                deleteIfExists,
                                                     byteOrder);
         long currentSequence = indexedBinaryFile.getSequence();
 
@@ -284,7 +278,7 @@ public class IndexedBinaryFile {
         String absolutePath = file.getAbsolutePath();
         int dataBlockSize = ChronicleConfig.SMALL.dataBlockSize();
 
-        BinaryFile binaryFile = new BinaryFile(absolutePath, dataBlockSize, fileSize, dataBlockSize, ByteOrder.BIG_ENDIAN);
+        BinaryFile binaryFile = new BinaryFile(absolutePath, dataBlockSize, fileSize, ByteOrder.BIG_ENDIAN);
         return binaryFile;
     }
 }

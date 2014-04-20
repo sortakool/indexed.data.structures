@@ -1,14 +1,13 @@
 package com.rsm.tables.records;
 
-import com.rsm.buffer.BufferFacade;
-import com.rsm.byteSlice.ByteArraySlice;
+import com.rsm.buffer.Bytes;
 
 /**
  * Created by Raymond on 12/18/13.
  */
 public interface BufferRecord<TYPE> extends Record<TYPE> {
 
-    void initialize(int entry, TYPE key, BufferFacade buffer, int recordStartPosition);
+    void initialize(int entry, TYPE key, Bytes buffer, int recordStartPosition);
 //    ByteArraySlice getByteArraySlice();
-    BufferFacade getBuffer();
+    Bytes getBuffer();
 }

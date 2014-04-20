@@ -1,6 +1,6 @@
 package com.rsm.tables.records;
 
-import com.rsm.buffer.BufferFacade;
+import com.rsm.buffer.Bytes;
 import com.rsm.byteSlice.ByteArraySlice;
 import com.rsm.tables.columns.*;
 import com.rsm.tables.schemas.Schema;
@@ -19,7 +19,7 @@ public class BufferBaseRecordImpl<TYPE> extends BaseRecord<TYPE> implements Buff
     protected boolean exists;
     protected int entry;
 //    protected final ByteArraySlice dataSlice = new ByteArraySlice();
-    protected BufferFacade buffer;
+    protected Bytes buffer;
     protected Object2IntOpenHashMap column2Position;
     protected int recordStartPosition;
 
@@ -34,7 +34,7 @@ public class BufferBaseRecordImpl<TYPE> extends BaseRecord<TYPE> implements Buff
     }
 
     @Override
-    public void initialize(int entry, TYPE key, BufferFacade buffer, int recordStartPosition) {
+    public void initialize(int entry, TYPE key, Bytes buffer, int recordStartPosition) {
         this.entry = entry;
         this.key = key;
         this.buffer = buffer;
@@ -43,7 +43,7 @@ public class BufferBaseRecordImpl<TYPE> extends BaseRecord<TYPE> implements Buff
     }
 
     @Override
-    public BufferFacade getBuffer() {
+    public Bytes getBuffer() {
         return buffer;
     }
 

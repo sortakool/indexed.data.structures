@@ -1,6 +1,5 @@
 package com.rsm.clients;
 
-import com.rsm.buffer.MappedFileBuffer;
 import com.rsm.io.selector.SelectedSelectionKeySet;
 import com.rsm.io.selector.SelectorUtil;
 import com.rsm.message.nasdaq.SequenceUtility;
@@ -19,13 +18,10 @@ import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
 import java.nio.channels.*;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Enumeration;
-import java.util.Iterator;
-import java.util.Set;
 
 /**
  * see http://books.google.com/books?id=kELcexu0pAcC&pg=PA371&lpg=PA371&dq=java+multicast+bytebuffer&source=bl&ots=SyEWLrM71V&sig=kLUEnaQxv3zBIO7VuQv4cHAsrE8&hl=en&sa=X&ei=TeQjU6DsO6H7yAHv2IGgDQ&ved=0CGsQ6AEwBg#v=onepage&q=java%20multicast%20bytebuffer&f=false
@@ -42,7 +38,7 @@ public class Client5 {
     public static final String EVENT_MULTICAST_IP = "FF02:0:0:0:0:0:0:4";
     public static final int EVENT_MULTICAST_PORT = 9001;
 
-    private final int logModCount = 1_000_000;
+    private final int logModCount = 5_000_000;
 
     private final MoldUDP64Packet commandMoldUDP64Packet = new MoldUDP64Packet();
     private final StreamHeader commandStreamHeader = new StreamHeader();
@@ -107,7 +103,7 @@ public class Client5 {
         String absolutePath = file.getAbsolutePath();
         long fileSize = file.length();
         int dataBlockSize = ChronicleConfig.SMALL.dataBlockSize();
-        binaryFile = new BinaryFile(absolutePath, dataBlockSize, fileSize, dataBlockSize, ByteOrder.BIG_ENDIAN);
+        binaryFile = new BinaryFile(absolutePath, dataBlockSize, fileSize, ByteOrder.BIG_ENDIAN);
 
 
         String fileName = file.getName();

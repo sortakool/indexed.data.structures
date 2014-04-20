@@ -25,7 +25,7 @@ import java.nio.ByteBuffer;
  *  All methods use a <code>long</code> index. However, depending on the actual
  *  implementation, index values may be limited to <code>Integer.MAX_VALUE</code>.
  */
-public interface BufferFacade
+public interface Bytes
 {
     int getCurrentIndex();
 
@@ -186,7 +186,7 @@ public interface BufferFacade
      *  Support for this method will depend on the underlying buffer's support
      *  for limits. {@link MappedFileBuffer} does not support limits, and will
      *  always return capacity. The non-threadsafe facade created by {@link
-     *  BufferFacadeFactory} does support limits, but the threadsafe facade
+     *  net.sf.kdgcommons.buffer.BufferFacadeFactory} does support limits, but the threadsafe facade
      *  only supports limits <em>that were set before the first facade method
      *  was invoked</em> (because it clones the buffer).
      */

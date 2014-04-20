@@ -1,9 +1,8 @@
 package com.rsm.tables;
 
-import com.rsm.buffer.BufferFacade;
+import com.rsm.buffer.Bytes;
 import com.rsm.buffer.MappedFileBuffer;
 import com.rsm.tables.records.BufferRecord;
-import com.rsm.tables.records.Record;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
@@ -25,7 +24,7 @@ public abstract class MappedFileBufferTable<RECORD extends BufferRecord> extends
     protected long expectedCapacity;
     protected long capacity;
 
-    protected BufferFacade buffer;
+    protected Bytes buffer;
 
     protected File file;
     protected int segmentSize;

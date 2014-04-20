@@ -2,22 +2,20 @@
 package com.rsm.message.nasdaq.binaryfile;
 
 
-import com.rsm.buffer.MappedFileBuffer;
+import com.rsm.buffer.NativeMappedFileBuffer;
 import com.rsm.message.nasdaq.itch.v4_1.ITCHMessageType;
 import com.rsm.message.nasdaq.moldudp.MoldUDPUtil;
+import com.rsm.util.ByteUnit;
+import com.rsm.util.ByteUtils;
 import net.openhft.chronicle.ChronicleConfig;
-import net.openhft.lang.io.MappedFile;
-import net.openhft.lang.io.MappedMemory;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
-import uk.co.real_logic.sbe.codec.java.DirectBuffer;
 import uk.co.real_logic.sbe.util.BitUtil;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
@@ -31,10 +29,9 @@ public class BinaryFile
     private final String filePath;
     private final Path path;
     private final File file;
-    final MappedFileBuffer mappedFile;
-    private final int blockSize;
+    final NativeMappedFileBuffer mappedFile;
+    private final long blockSize;
     private final long initialFileSize;
-    private final long growBySize;
     private final ByteOrder byteOrder;
     private long sequence = 0;
     private long currentFilePosition = 0;
@@ -43,18 +40,16 @@ public class BinaryFile
     private long nextBufferPosition = 0;
 
 
-    public BinaryFile(String filePath, int blockSize, long initialFileSize, long growBySize, ByteOrder byteOrder) throws IOException {
+    public BinaryFile(String filePath, long blockSize, long initialFileSize, ByteOrder byteOrder) throws IOException {
         this.filePath = filePath;
         this.currentFilePosition = 0;
         this.blockSize = blockSize;
         this.initialFileSize = initialFileSize;
-        this.growBySize = growBySize;
         this.byteOrder = byteOrder;
         this.nextBufferPosition += this.blockSize;
         path = Paths.get(filePath);
         file = path.toFile();
-        mappedFile = new MappedFileBuffer(file, this.blockSize, this.initialFileSize, this.growBySize, true, false);
-//        mappedFile.setByteOrder(byteOrder);
+        mappedFile = new NativeMappedFileBuffer(file, this.blockSize, this.initialFileSize, true, false);
         this.nextMessageLength = getNextMessageLength();
     }
 
@@ -75,8 +70,8 @@ public class BinaryFile
         return (nextMessageLength != 0);
     }
 
-    public int next(ByteBuffer destination) throws IOException {
-        int currentMessageLength = nextMessageLength;
+    public short next(ByteBuffer destination) throws IOException {
+        short currentMessageLength = nextMessageLength;
         this.mappedFile.getBytes(currentFilePosition, destination, currentMessageLength);
         this.sequence++;
         this.currentFilePosition += currentMessageLength;
@@ -84,15 +79,6 @@ public class BinaryFile
         return currentMessageLength;
 
     }
-
-//    private void checkDirectBuffer(long size) throws IOException {
-//        final long deltaFilePosition = this.currentFilePosition + size;
-//        if(deltaFilePosition >= nextBufferPosition) {
-//            MappedByteBuffer buffer = this.mappedFile.buffer(nextBufferPosition);
-//            this.directBuffer.wrap(buffer);
-//            nextBufferPosition += blockSize;
-//        }
-//    }
 
     public long getSequence() {
         return sequence;
@@ -126,14 +112,15 @@ public class BinaryFile
         FileSystem fileSystem = FileSystems.getDefault();
         Path path = fileSystem.getPath(System.getProperty("user.home") + "/Downloads/11092013.NASDAQ_ITCH41");
         File file = path.toFile();
-        long fileSize = file.length();
+        long fileSize = file.length()*2;
         String absolutePath = file.getAbsolutePath();
-        int dataBlockSize = ChronicleConfig.SMALL.dataBlockSize();
+//        long dataBlockSize = ByteUtils.PAGE_SIZE*10;
+        long dataBlockSize = 1000*1000*32;//force page aligned segment size
 
         final ByteBuffer tempByteBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE);
 
         final long startTime = System.nanoTime();
-        BinaryFile binaryFile = new BinaryFile(absolutePath, dataBlockSize, fileSize, dataBlockSize, ByteOrder.BIG_ENDIAN);
+        BinaryFile binaryFile = new BinaryFile(absolutePath, dataBlockSize, fileSize, ByteOrder.BIG_ENDIAN);
         long binaryFileSequence = -1;
         while(binaryFile.hasNext()) {
             tempByteBuffer.clear();
