@@ -71,6 +71,7 @@ implements Bytes, Cloneable
     private File _file;
     private boolean _isWritable;
     private long _initialFileSize;
+    private long _fileSize;
     private long _initialSegmentSize;              // long because it's used in long expressions
     private long _segmentSize;              // long because it's used in long expressions
 //    private long _growBySize;
@@ -202,29 +203,30 @@ implements Bytes, Cloneable
             _channel = _mappedFile.getChannel();
 
             //make each segment equal sizes
-            long fileSize = Math.max(_segmentSize, capacity());
-            long remainder = fileSize % _segmentSize;
-            fileSize = _initialFileSize + remainder;
-            if(fileSize <= 0) {
-                throw new IllegalArgumentException("Invalid File Size " + fileSize);
+            long tempFileSize = Math.max(_segmentSize, fileLength());
+            long remainder = tempFileSize % _segmentSize;
+            tempFileSize = _initialFileSize + remainder;
+            if(tempFileSize <= 0) {
+                throw new IllegalArgumentException("Invalid File Size " + tempFileSize);
             }
 
-            long bufArraySizeLong = (int)(fileSize / segmentSize)
-                             + ((fileSize % segmentSize != 0) ? 1 : 0);
+            long bufArraySizeLong = (int)(tempFileSize / segmentSize)
+                             + ((tempFileSize % segmentSize != 0) ? 1 : 0);
             if(bufArraySizeLong > Integer.MAX_VALUE) {
                 throw new IllegalArgumentException(bufArraySizeLong + " segments is greater than allowed count of " + Integer.MAX_VALUE);
             }
             int bufArraySize = (int)bufArraySizeLong;
             _buffers = new NativeMappedMemory[bufArraySize];
             int bufIdx = 0;
-            for (long offset = 0 ; offset < fileSize ; offset += segmentSize)
+            for (long offset = 0 ; offset < tempFileSize ; offset += segmentSize)
             {
-                long remainingFileSize = fileSize - offset;
+                long remainingFileSize = tempFileSize - offset;
                 long thisSegmentSize = Math.min(segmentSize, remainingFileSize);
                 final NativeMappedMemory nativeMappedMemory = NativeMappedMemory.create(thisSegmentSize);
                 _buffers[bufIdx++] = nativeMappedMemory;
             }
             position = 0;
+            this._fileSize = tempFileSize;
             processPosition();
             //preload first segment
             nativeMappedMemory(position);
@@ -237,24 +239,24 @@ implements Bytes, Cloneable
 
     private void grow(int index) {
         if(index >= _buffers.length) {
-            long capacity = capacity();
-            long fileSize = capacity() + _segmentSize;
-            long remainder = fileSize % _segmentSize;
-            fileSize += remainder;
+            long capacity = this._fileSize;
+            long tempFileSize = this._fileSize + _segmentSize;
+            long remainder = tempFileSize % _segmentSize;
+            tempFileSize += remainder;
 
 //            MapMode mapMode = _isWritable ? MapMode.READ_WRITE : MapMode.READ_ONLY;
 
-            long bufArraySizeLong = (fileSize / _segmentSize)
-                    + ((fileSize % _segmentSize != 0) ? 1 : 0);
+            long bufArraySizeLong = (tempFileSize / _segmentSize)
+                    + ((tempFileSize % _segmentSize != 0) ? 1 : 0);
             if(bufArraySizeLong > Integer.MAX_VALUE) {
                 throw new IllegalArgumentException(bufArraySizeLong + " segments is greater than allowed count of " + Integer.MAX_VALUE);
             }
             int bufArraySize = (int)bufArraySizeLong;
             log.info("growing from [segmentSize="+_segmentSize+"] [capacity="+capacity+"][numOfSegment=" + _buffers.length + "] to " +
-                    "[capacity="+fileSize+"][numOfSegments=" + bufArraySize+"]");
+                    "[capacity="+tempFileSize+"][numOfSegments=" + bufArraySize+"]");
             NativeMappedMemory[] temp = new NativeMappedMemory[bufArraySize];
             int bufIdx = 0;
-            for (long offset = 0 ; offset < fileSize ; offset += _segmentSize)
+            for (long offset = 0 ; offset < tempFileSize ; offset += _segmentSize)
             {
                 if(bufIdx < _buffers.length) {
                     try {
@@ -278,6 +280,7 @@ implements Bytes, Cloneable
                 bufIdx++;
             }
             _buffers = temp;
+            this._fileSize = tempFileSize;
         }
     }
 
@@ -376,6 +379,10 @@ implements Bytes, Cloneable
      */
     public long capacity()
     {
+        return this._fileSize;
+    }
+
+    private long fileLength() {
         try {
             return _mappedFile.length();
         }
@@ -1822,8 +1829,8 @@ implements Bytes, Cloneable
         while (len > 0)
         {
             currentByteBuffer = nativeMappedMemory(position);
-            long count = Math.min(len, currentByteBuffer.remaining());
             final long bufferPosition = getBufferPosition(position);
+            long count = Math.min(len, currentByteBuffer.remainingCapacity(bufferPosition));
             final long returnedCount = currentByteBuffer.getBytes(bufferPosition, destination, destinationPosition, count);
             assert (count == returnedCount);
             destinationPosition += count;
@@ -1857,10 +1864,11 @@ implements Bytes, Cloneable
         while (len > 0)
         {
             NativeMappedMemory buf = nativeMappedMemory(index);
-            long count = Math.min(len, buf.remaining());
             final long bufferPosition = getBufferPosition(index);
+            long count = Long.min(len, buf.remainingCapacity(bufferPosition));
             final long returnedCount = buf.getBytes(bufferPosition, destination, destinationPosition, count);
             assert (count == returnedCount);
+            destinationPosition += count;
             index += count;
             len -= count;
         }
@@ -1891,8 +1899,8 @@ implements Bytes, Cloneable
         while (length > 0)
         {
             currentByteBuffer = nativeMappedMemory(position);
-            long count = Math.min(length, currentByteBuffer.remaining());
             final long bufferPosition = getBufferPosition(position);
+            long count = Math.min(length, currentByteBuffer.remainingCapacity(bufferPosition));
             final long returnedCount = currentByteBuffer.putBytes(bufferPosition, source, sourcePosition, count);
             assert (count == returnedCount);
             sourcePosition += count;
@@ -1925,10 +1933,9 @@ implements Bytes, Cloneable
         while (length > 0)
         {
             NativeMappedMemory buf = nativeMappedMemory(index);
-            long count = Math.min(length, buf.remaining());
             final long bufferPosition = getBufferPosition(index);
+            long count = Math.min(length, buf.remainingCapacity(bufferPosition));
             final long returnedCount = buf.putBytes(bufferPosition, source, sourcePosition, count);
-//            buf.force();
             assert (count == returnedCount);
             sourcePosition += count;
             index += count;
@@ -2068,6 +2075,7 @@ implements Bytes, Cloneable
         int oldIndex = getBuffersIndex(oldPosition);
         int newIndex = getBuffersIndex(newPosition);
         for(int i=oldIndex; i<newIndex; i++) {
+//            ByteUtils.UNSAFE.freeMemory(_buffers[i].addressOffset());
             unmap(_buffers[i]);
         }
     }

@@ -1075,11 +1075,11 @@ public class NativeMappedMemory {
     /* NativeMappedMemory                                                                                                                         */
     /* ----------------------------------------------------------------------------------------------------------------------------- */
 
-    private long remainingCapacity(long offset) {
+    public long remainingCapacity(long offset) {
         return capacity - offset;
     }
 
-    private int remainingCapacityAsInt(long offset) {
+    public int remainingCapacityAsInt(long offset) {
         return (int)Long.min(capacity - offset, Integer.MAX_VALUE);
     }
 

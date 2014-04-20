@@ -2,6 +2,7 @@ package com.rsm.message.nasdaq.binaryfile;
 
 import com.rsm.buffer.MappedFileBuffer;
 import com.rsm.buffer.NativeMappedFileBuffer;
+import com.rsm.buffer.NativeMappedMemory;
 import com.rsm.message.nasdaq.itch.v4_1.ITCHMessageType;
 import com.rsm.message.nasdaq.moldudp.MoldUDPUtil;
 import net.openhft.chronicle.ChronicleConfig;
@@ -181,6 +182,15 @@ public class IndexedBinaryFile {
     }
 
     public short getMessage(long sequence, ByteBuffer destination) {
+        assert(sequence > 0);
+        final long payloadPosition = getPayloadPosition(sequence);
+        final short messageLength = dataMappedFile.getShort(payloadPosition, byteOrder);
+        assert(messageLength <= destination.remaining());
+        dataMappedFile.getBytes(payloadPosition, destination, messageLength);
+        return messageLength;
+    }
+
+    public short getMessage(long sequence, NativeMappedMemory destination) {
         assert(sequence > 0);
         final long payloadPosition = getPayloadPosition(sequence);
         final short messageLength = dataMappedFile.getShort(payloadPosition, byteOrder);

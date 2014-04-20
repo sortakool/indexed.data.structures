@@ -78,7 +78,15 @@ public class BinaryFile
         this.currentFilePosition += currentMessageLength;
         this.nextMessageLength = getNextMessageLength();
         return currentMessageLength;
+    }
 
+    public short next(NativeMappedMemory destination) throws IOException {
+        short currentMessageLength = nextMessageLength;
+        this.mappedFile.getBytes(currentFilePosition, destination, currentMessageLength);
+        this.sequence++;
+        this.currentFilePosition += currentMessageLength;
+        this.nextMessageLength = getNextMessageLength();
+        return currentMessageLength;
     }
 
     public long getSequence() {
@@ -114,26 +122,44 @@ public class BinaryFile
         long dataBlockSize = 1000*1000*32;//force page aligned segment size
 
         final ByteBuffer tempByteBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE);
+        final NativeMappedMemory nativeMappedMemory = new NativeMappedMemory(tempByteBuffer);
 
         final long startTime = System.nanoTime();
         BinaryFile binaryFile = new BinaryFile(absolutePath, dataBlockSize, fileSize, ByteOrder.BIG_ENDIAN);
         long binaryFileSequence = -1;
         while(binaryFile.hasNext()) {
-            tempByteBuffer.clear();
-            binaryFile.next(tempByteBuffer);
-            tempByteBuffer.flip();
-            final byte messageType = tempByteBuffer.get();
-            final ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
-            if(itchMessageType == ITCHMessageType.NULL_VAL) {
-                throw new RuntimeException("Null ITCHMessageType for " + binaryFile);
-            }
+            nativeMappedMemory.clear();
             binaryFileSequence = binaryFile.getSequence();
-            if((binaryFileSequence < 10) || (binaryFileSequence % 1_000_000 == 0)) {
+            assert(nativeMappedMemory.isMapped());
+            binaryFile.next(nativeMappedMemory);
+            assert(nativeMappedMemory.isMapped());
+            nativeMappedMemory.flip();
+            binaryFileSequence = binaryFile.getSequence();
+            assert(nativeMappedMemory.isMapped());
+            final byte messageType = nativeMappedMemory.get();
+            final ITCHMessageType itchMessageType = getItchMessageType(binaryFileSequence, messageType);
+            binaryFileSequence = binaryFile.getSequence();
+            assert(nativeMappedMemory.isMapped());
+            if((binaryFileSequence < 10) || (binaryFileSequence % 5_000_000 == 0)) {
                 log.info("[sequence=" + binaryFile.getSequence() + "][itchMessageType="+itchMessageType+"]");
             }
         }
         final long endTime = System.nanoTime();
         long duration = endTime - startTime;
         log.info("end - [sequence=" + binaryFileSequence + "][duration="+ TimeUnit.NANOSECONDS.toMillis(duration)+"ms]");
+    }
+
+    private static ITCHMessageType getItchMessageType(long sequence, byte messageType) {
+        ITCHMessageType itchMessageType;
+        try {
+            itchMessageType = ITCHMessageType.get(messageType);
+        }
+        catch(Exception e) {
+            throw new RuntimeException("Invalid ITCHMessageType at sequence " + sequence);
+        }
+        if(itchMessageType == ITCHMessageType.NULL_VAL) {
+            throw new RuntimeException("Null ITCHMessageType at sequence " + sequence);
+        }
+        return itchMessageType;
     }
 }

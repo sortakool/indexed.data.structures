@@ -354,7 +354,7 @@ public class NativeMappedFileBufferTest {
 //        ByteBuffer returnedByteBuffer = ByteBuffer.allocateDirect(byteBufferCapacity);
         NativeMappedMemory returnedByteBuffer = new NativeMappedMemory(ByteBuffer.allocateDirect(byteBufferCapacity));
         for(position = 0; position<initialFileSize*2; position++) {
-            log.info("[position="+position+"]");
+//            log.info("[position="+position+"]");
             mappedFile.position(position);
             testByteBuffer.clear();
             fillWithRandomBytes(testByteBuffer);
@@ -372,8 +372,8 @@ public class NativeMappedFileBufferTest {
             Assert.assertEquals(byteBufferCapacity, returnedByteBuffer.limit());
             Assert.assertEquals(0, returnedByteBuffer.remaining());
             returnedByteBuffer.flip();
-//            Assert.assertEquals(testByteBuffer, returnedByteBuffer);
-            assertNativeMappedFileBuffers(mappedFile, position+1, testByteBuffer, returnedByteBuffer);
+            Assert.assertEquals(testByteBuffer, returnedByteBuffer);
+//            assertNativeMappedFileBuffers(mappedFile, position+1, testByteBuffer, returnedByteBuffer);
 
             //relative
             mappedFile.position(position);
@@ -384,8 +384,8 @@ public class NativeMappedFileBufferTest {
             Assert.assertEquals(byteBufferCapacity, returnedByteBuffer.limit());
             Assert.assertEquals(0, returnedByteBuffer.remaining());
             returnedByteBuffer.flip();
-//            Assert.assertEquals(testByteBuffer, returnedByteBuffer);
-            assertNativeMappedFileBuffers(mappedFile, position+1, testByteBuffer, returnedByteBuffer);
+            Assert.assertEquals(testByteBuffer, returnedByteBuffer);
+//            assertNativeMappedFileBuffers(mappedFile, position+1, testByteBuffer, returnedByteBuffer);
 
             testByteBuffer.clear();
             fillWithRandomBytes(testByteBuffer);
@@ -402,8 +402,8 @@ public class NativeMappedFileBufferTest {
             Assert.assertEquals(byteBufferCapacity, returnedByteBuffer.position());
             Assert.assertEquals(byteBufferCapacity, returnedByteBuffer.limit());
             Assert.assertEquals(0, returnedByteBuffer.remaining());
-//            Assert.assertEquals(testByteBuffer, returnedByteBuffer);
-            assertNativeMappedFileBuffers(mappedFile, position+1, testByteBuffer, returnedByteBuffer);
+            Assert.assertEquals(testByteBuffer, returnedByteBuffer);
+//            assertNativeMappedFileBuffers(mappedFile, position+1, testByteBuffer, returnedByteBuffer);
         }
     }
 
@@ -441,8 +441,8 @@ public class NativeMappedFileBufferTest {
         Assert.assertEquals(0, returnedByteBuffer.remaining());
         returnedByteBuffer.flip();
 
-        assertNativeMappedFileBuffers(mappedFile, byteBufferCapacity, testByteBuffer, returnedByteBuffer);
-//        Assert.assertEquals(testByteBuffer, returnedByteBuffer);
+//        assertNativeMappedFileBuffers(mappedFile, byteBufferCapacity, testByteBuffer, returnedByteBuffer);
+        Assert.assertEquals(testByteBuffer, returnedByteBuffer);
     }
 
     @Test
@@ -480,8 +480,49 @@ public class NativeMappedFileBufferTest {
         Assert.assertEquals(0, returnedByteBuffer.remaining());
         returnedByteBuffer.flip();
 
-        assertNativeMappedFileBuffers(mappedFile, byteBufferCapacity, testByteBuffer, returnedByteBuffer);
-//        Assert.assertEquals(testByteBuffer, returnedByteBuffer);
+//        assertNativeMappedFileBuffers(mappedFile, byteBufferCapacity, testByteBuffer, returnedByteBuffer);
+//        assertRelativeNativeMappedFileBuffers(mappedFile, byteBufferCapacity, testByteBuffer, returnedByteBuffer);
+        Assert.assertEquals(testByteBuffer, returnedByteBuffer);
+    }
+
+    @Test
+    public void testNativeMappedMemory_HI() throws Exception {
+        final long segmentSize = ByteUtils.PAGE_SIZE;
+        final long initialFileSize = segmentSize*4;
+        final NativeMappedFileBuffer mappedFile = createMappedFileBuffer(segmentSize, initialFileSize);
+
+        long position;
+
+        //ByteBuffer
+        String hi = new String("hi");
+        long byteBufferCapacity = hi.getBytes().length;
+        NativeMappedMemory testByteBuffer = new NativeMappedMemory(ByteBuffer.allocateDirect((int)byteBufferCapacity));
+        NativeMappedMemory returnedByteBuffer = new NativeMappedMemory(ByteBuffer.allocateDirect((int)byteBufferCapacity));
+
+        position = mappedFile.segmentSize()-1;
+        mappedFile.position(position);
+        testByteBuffer.clear();
+//        fillWithRandomBytes(testByteBuffer);
+        fill(hi.getBytes(), testByteBuffer);
+        //absolute
+        mappedFile.putBytes(testByteBuffer);
+        Assert.assertEquals(position+byteBufferCapacity, mappedFile.position());
+        Assert.assertEquals(byteBufferCapacity, testByteBuffer.position());
+        Assert.assertEquals(byteBufferCapacity, testByteBuffer.limit());
+        Assert.assertEquals(0, testByteBuffer.remaining());
+        testByteBuffer.flip();
+        returnedByteBuffer.clear();
+        mappedFile.position(position);
+        mappedFile.getBytes(returnedByteBuffer);
+        Assert.assertEquals(position+byteBufferCapacity, mappedFile.position());
+        Assert.assertEquals(byteBufferCapacity, returnedByteBuffer.position());
+        Assert.assertEquals(byteBufferCapacity, returnedByteBuffer.limit());
+        Assert.assertEquals(0, returnedByteBuffer.remaining());
+        returnedByteBuffer.flip();
+
+//        assertNativeMappedFileBuffers(mappedFile, byteBufferCapacity, testByteBuffer, returnedByteBuffer);
+//        assertRelativeNativeMappedFileBuffers(mappedFile, byteBufferCapacity, testByteBuffer, returnedByteBuffer);
+        Assert.assertEquals(testByteBuffer, returnedByteBuffer);
     }
 
     private void assertNativeMappedFileBuffers(NativeMappedFileBuffer mappedFile, long length, NativeMappedMemory testByteBuffer, NativeMappedMemory returnedByteBuffer) {
@@ -501,6 +542,28 @@ public class NativeMappedFileBufferTest {
             Assert.assertEquals("backwards testValue does not match at position " + i, mappedFileValue, testValue);
             Assert.assertEquals("backwards returnedValue does not match at position " + i, mappedFileValue, returnedValue);
         }
+    }
+
+    private void assertRelativeNativeMappedFileBuffers(NativeMappedFileBuffer mappedFile, long length, NativeMappedMemory testByteBuffer, NativeMappedMemory returnedByteBuffer) {
+        //forwards
+        mappedFile.position(0);
+        testByteBuffer.position(0);
+        returnedByteBuffer.position(0);
+        for(long i=0; i<length; i++) {
+            final byte mappedFileValue = mappedFile.get();
+            final byte testValue = testByteBuffer.get();
+            final byte returnedValue = returnedByteBuffer.get();
+            Assert.assertEquals("forwards testValue does not match at position " + i, mappedFileValue, testValue);
+            Assert.assertEquals("forwards returnedValue does not match at position " + i, mappedFileValue, returnedValue);
+        }
+//        //backwards
+//        for(long i=length-1; i>0; i--) {
+//            final byte mappedFileValue = mappedFile.get(i);
+//            final byte testValue = testByteBuffer.get(i);
+//            final byte returnedValue = returnedByteBuffer.get(i);
+//            Assert.assertEquals("backwards testValue does not match at position " + i, mappedFileValue, testValue);
+//            Assert.assertEquals("backwards returnedValue does not match at position " + i, mappedFileValue, returnedValue);
+//        }
     }
 
 
