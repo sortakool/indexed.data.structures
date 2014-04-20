@@ -128,28 +128,43 @@ public class IndexedBinaryFile {
         //indexFile
         final long indexedMappedFilePosition = indexMappedFile.position();
         indexMappedFile.putLong(sequence+1, byteOrder);
-//        indexMappedFile.force();
         assert( indexMappedFile.getLong(indexedMappedFilePosition, byteOrder) == (sequence+1));
         final long dataMappedFilePosition = dataMappedFile.position();
         final int payloadLength = payload.remaining();
         assert (messageLength == payloadLength) : "Mismatch:[sequence="+sequence+"][messageLength="+messageLength+"][payloadLength="+payloadLength+"]";
         long payloadPosition = dataMappedFilePosition + payloadLength + BitUtil.SIZE_OF_SHORT;
         indexMappedFile.putLong(payloadPosition, byteOrder);
-//        indexMappedFile.force();
         assert( indexMappedFile.getLong(indexedMappedFilePosition + BitUtil.SIZE_OF_LONG, byteOrder) == payloadPosition);
 
         //dataFile
-        dataMappedFile.putShort((short) messageLength, byteOrder);
-//        dataMappedFile.force();
+        dataMappedFile.putShort(messageLength, byteOrder);
         assert(dataMappedFile.position() == (dataMappedFilePosition+BitUtil.SIZE_OF_SHORT) );
         assert( dataMappedFile.getShort(dataMappedFilePosition, byteOrder) == payloadLength);
         dataMappedFile.putBytes(payload);
-//        dataMappedFile.force();
         assert(dataMappedFile.position() == (dataMappedFilePosition+BitUtil.SIZE_OF_SHORT+payloadLength) );
+        return sequence;
+    }
 
-//        indexMappedFile.force();
-//        dataMappedFile.force();
+    public long increment(short messageLength, NativeMappedMemory payload) {
+        sequence++;
 
+        //indexFile
+        final long indexedMappedFilePosition = indexMappedFile.position();
+        indexMappedFile.putLong(sequence+1, byteOrder);
+        assert( indexMappedFile.getLong(indexedMappedFilePosition, byteOrder) == (sequence+1));
+        final long dataMappedFilePosition = dataMappedFile.position();
+        final long payloadLength = payload.remaining();
+        assert (messageLength == payloadLength) : "Mismatch:[sequence="+sequence+"][messageLength="+messageLength+"][payloadLength="+payloadLength+"]";
+        long payloadPosition = dataMappedFilePosition + payloadLength + BitUtil.SIZE_OF_SHORT;
+        indexMappedFile.putLong(payloadPosition, byteOrder);
+        assert( indexMappedFile.getLong(indexedMappedFilePosition + BitUtil.SIZE_OF_LONG, byteOrder) == payloadPosition);
+
+        //dataFile
+        dataMappedFile.putShort(messageLength, byteOrder);
+        assert(dataMappedFile.position() == (dataMappedFilePosition+BitUtil.SIZE_OF_SHORT) );
+        assert( dataMappedFile.getShort(dataMappedFilePosition, byteOrder) == payloadLength);
+        dataMappedFile.putBytes(payload);
+        assert(dataMappedFile.position() == (dataMappedFilePosition+BitUtil.SIZE_OF_SHORT+payloadLength) );
         return sequence;
     }
 
@@ -238,8 +253,10 @@ public class IndexedBinaryFile {
                                                     byteOrder);
         long currentSequence = indexedBinaryFile.getSequence();
 
-        final ByteBuffer binaryFileByteBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE);
-        final ByteBuffer indexedBinaryFileByteBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE);
+        final ByteBuffer binaryFileByteBuffer2 = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE);
+        final NativeMappedMemory binaryFileByteBuffer = new NativeMappedMemory(binaryFileByteBuffer2);
+        final ByteBuffer indexedBinaryFileByteBuffer2 = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE);
+        final NativeMappedMemory indexedBinaryFileByteBuffer = new NativeMappedMemory(indexedBinaryFileByteBuffer2);
 
         final long startTime = System.nanoTime();
         long binaryFileSequence = -1;
