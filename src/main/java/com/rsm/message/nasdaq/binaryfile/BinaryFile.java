@@ -3,6 +3,7 @@ package com.rsm.message.nasdaq.binaryfile;
 
 
 import com.rsm.buffer.NativeMappedFileBuffer;
+import com.rsm.buffer.NativeMappedMemory;
 import com.rsm.message.nasdaq.itch.v4_1.ITCHMessageType;
 import com.rsm.message.nasdaq.moldudp.MoldUDPUtil;
 import com.rsm.util.ByteUnit;
@@ -93,11 +94,6 @@ public class BinaryFile
         this.currentFilePosition += BitUtil.SIZE_OF_SHORT;
         return messageLength;
     }
-
-//    private int getDirectBufferIndex(long position) {
-//        int directBufferIndex = (int)(position % blockSize);
-//        return directBufferIndex;
-//    }
 
     public void reset() throws IOException {
         currentFilePosition = 0;
