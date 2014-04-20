@@ -406,15 +406,11 @@ public class Sequencer2 {
 
         String indexFileSuffix = "index";
         String dataFileSuffix = "data";
-//        final int one_gb = 1_073_741_824;
-//        final long maxSegmentSize = MappedFileBuffer.MAX_SEGMENT_SIZE;
         long dataFileBlockSize = ByteUnit.MEGABYTE.getBytes() * 256;
         long dataFileInitialFileSize = ((long)MappedFileBuffer.MAX_SEGMENT_SIZE)*50L;
-//        long dataFileGrowBySize = MappedFileBuffer.MAX_SEGMENT_SIZE;
 
         long indexFileBlockSize = ((long)BitUtil.SIZE_OF_LONG)*2L*1_000_000L; //accomodate 1,000,000 entries
         long indexFileInitialFileSize = ((long)BitUtil.SIZE_OF_LONG)*2L*50L*1_000_000L; //accomodate 1,000,000,000 entries
-//        long indexFileGrowBySize = BitUtil.SIZE_OF_LONG*2*1_000_000; //accomodate 1,000,000 entries
         boolean deleteIfExists = true;
         ByteOrder byteOrder = ByteOrder.BIG_ENDIAN;
 
