@@ -62,9 +62,10 @@ public class Sequencer2 {
 
     private final EventMoldUDP64Packet eventMoldUDP64Packet = new EventMoldUDP64Packet();
     private final StreamHeader eventStreamHeader = new StreamHeader();
-    ByteBuffer eventByteBuffer;
+    ByteBuffer eventBuffer;
+    NativeMappedMemory eventByteBuffer;
     DirectBuffer eventDirectBuffer;
-    int eventPosition = 0;
+    long eventPosition = 0;
 //    long eventSequence = 0;
 
     private SequenceUtility sequenceUtility;
@@ -102,9 +103,10 @@ public class Sequencer2 {
         commandDirectBuffer = new DirectBuffer(commandBuffer);
         commandPosition = 0;
 
-        eventByteBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE*2);
-        eventByteBuffer.order(ByteOrder.BIG_ENDIAN);
-        eventDirectBuffer = new DirectBuffer(eventByteBuffer);
+        eventBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE*2);
+        eventBuffer.order(ByteOrder.BIG_ENDIAN);
+        eventByteBuffer = new NativeMappedMemory(eventBuffer);
+        eventDirectBuffer = new DirectBuffer(eventBuffer);
         eventPosition = 0;
 
         Selector selector = Selector.open();
@@ -164,7 +166,7 @@ public class Sequencer2 {
                     if(selectionKey.isReadable()) {
                         DatagramChannel ch = (DatagramChannel)selectionKey.channel();
                         commandBuffer.position((int)commandByteBuffer.position());
-                        commandBuffer.limit((int)commandByteBuffer.limit());
+                        commandBuffer.limit((int) commandByteBuffer.limit());
                         SocketAddress readableSocketAddress = ch.receive(commandBuffer);
                         commandByteBuffer.position(commandBuffer.position());
                         commandByteBuffer.limit(commandBuffer.limit());
@@ -194,7 +196,7 @@ public class Sequencer2 {
                                 long eventSequence = sequenceUtility.getSequence(eventSequenceIndex);
                                 currentEventSequence = eventSequence;
 
-                                eventMoldUDP64Packet.wrapForEncode(eventDirectBuffer, eventPosition);//, EventMoldUDP64Packet.BLOCK_LENGTH, EventMoldUDP64Packet.SCHEMA_VERSION);
+                                eventMoldUDP64Packet.wrapForEncode(eventDirectBuffer, (int)eventPosition);//, EventMoldUDP64Packet.BLOCK_LENGTH, EventMoldUDP64Packet.SCHEMA_VERSION);
                                 eventMoldUDP64Packet.eventSequence(eventSequence);
                                 eventMoldUDP64Packet.downstreamPacketHeader().putSession(sessionBytes, 0);
                                 eventMoldUDP64Packet.downstreamPacketHeader().sourceSequence(sourceSequence);
@@ -216,7 +218,7 @@ public class Sequencer2 {
                                     commandPosition += 2;
                                     commandByteBuffer.position(commandPosition);
 
-                                    eventDirectBuffer.putShort(eventPosition, messageLength, ByteOrder.BIG_ENDIAN);
+                                    eventDirectBuffer.putShort((int)eventPosition, messageLength, ByteOrder.BIG_ENDIAN);
                                     eventPosition += 2;
 
                                     //streamHeader
@@ -235,8 +237,8 @@ public class Sequencer2 {
                                     ByteUtils.fillWithSpaces(eventSourceBytes);
                                     ByteUtils.putLongBigEndian(eventSourceBytes, 0, source);
 
-                                    int eventStreamHeaderPosition = eventPosition;
-                                    eventStreamHeader.wrap(eventDirectBuffer, eventPosition, streamHeaderVersion);
+                                    long eventStreamHeaderPosition = eventPosition;
+                                    eventStreamHeader.wrap(eventDirectBuffer, (int)eventPosition, streamHeaderVersion);
                                     eventStreamHeader.timestampNanos(timestampNanos);
                                     eventStreamHeader.major(major);
                                     eventStreamHeader.minor(minor);
@@ -248,10 +250,14 @@ public class Sequencer2 {
 
                                     //payload
                                     int payloadSize = messageLength - streamHeaderSize;
-                                    int bytesRead = commandDirectBuffer.getBytes((int)commandPosition, eventByteBuffer, payloadSize);
+                                    eventBuffer.position((int)eventByteBuffer.position());
+                                    eventBuffer.limit((int)eventByteBuffer.limit());
+                                    int bytesRead = commandDirectBuffer.getBytes((int)commandPosition, eventBuffer, payloadSize);
+                                    eventByteBuffer.position(eventBuffer.position());
+                                    eventByteBuffer.limit(eventBuffer.limit());
                                     assert (bytesRead == payloadSize);
                                     byte messageType = commandDirectBuffer.getByte((int)commandPosition);
-                                    final byte eventMessageType = eventDirectBuffer.getByte(eventPosition);
+                                    final byte eventMessageType = eventDirectBuffer.getByte((int)eventPosition);
                                     assert(messageType == eventMessageType);
                                     ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
                                     commandPosition += payloadSize;
@@ -260,7 +266,7 @@ public class Sequencer2 {
                                     eventByteBuffer.position(eventPosition);
 
                                     //write event to indexed binary file
-                                    int eventByteBufferLimit = eventByteBuffer.limit();
+                                    long eventByteBufferLimit = eventByteBuffer.limit();
                                     eventByteBuffer.position(eventStreamHeaderPosition);
                                     eventByteBuffer.limit(eventPosition);
 //                                    final int remaining = eventByteBuffer.remaining();
@@ -313,12 +319,16 @@ public class Sequencer2 {
                         }
                     }
                     else if(selectionKey.isWritable()) {
-                        int eventLimit = eventPosition;
+                        long eventLimit = eventPosition;
                         eventPosition = eventByteBuffer.position();
                         eventByteBuffer.flip();
                         if(eventByteBuffer.hasRemaining()) {
 //                            indexedBinaryFile.force();
-                            int eventBytesSent = eventChannel.send(eventByteBuffer, eventGroup);
+                            eventBuffer.position((int)eventByteBuffer.position());
+                            eventBuffer.limit((int)eventByteBuffer.limit());
+                            int eventBytesSent = eventChannel.send(eventBuffer, eventGroup);
+                            eventByteBuffer.position(eventBuffer.position());
+                            eventByteBuffer.limit(eventBuffer.limit());
                             totalBytesSent += eventBytesSent;
 //                            long eventSequence = sequenceUtility.incrementSequence(eventSequenceIndex);
                             long eventSequence = sequenceUtility.getSequence(eventSequenceIndex);
