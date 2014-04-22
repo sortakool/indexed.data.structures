@@ -1,6 +1,7 @@
 package com.rsm.servers;
 
 import com.rsm.buffer.MappedFileBuffer;
+import com.rsm.buffer.NativeMappedMemory;
 import com.rsm.io.selector.SelectedSelectionKeySet;
 import com.rsm.io.selector.SelectorUtil;
 import com.rsm.message.nasdaq.SequenceUtility;
@@ -46,7 +47,8 @@ public class Sequencer2 {
 
     DatagramChannel eventChannel = null;
 
-    ByteBuffer commandByteBuffer;
+    ByteBuffer commandBuffer;
+    NativeMappedMemory commandByteBuffer;
     DirectBuffer commandDirectBuffer;
     int commandPosition = 0;
 
@@ -94,9 +96,10 @@ public class Sequencer2 {
         eventSequenceIndex = sequenceUtility.register();
         sourceSequenceIndex = sequenceUtility.register();
 
-        commandByteBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE*2);
-        commandByteBuffer.order(ByteOrder.BIG_ENDIAN);
-        commandDirectBuffer = new DirectBuffer(commandByteBuffer);
+        commandBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE*2);
+        commandBuffer.order(ByteOrder.BIG_ENDIAN);
+        commandByteBuffer = new NativeMappedMemory(commandBuffer);
+        commandDirectBuffer = new DirectBuffer(commandBuffer);
         commandPosition = 0;
 
         eventByteBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE*2);
@@ -160,17 +163,21 @@ public class Sequencer2 {
 
                     if(selectionKey.isReadable()) {
                         DatagramChannel ch = (DatagramChannel)selectionKey.channel();
-                        SocketAddress readableSocketAddress = ch.receive(commandByteBuffer);
+                        commandBuffer.position((int)commandByteBuffer.position());
+                        commandBuffer.limit((int)commandByteBuffer.limit());
+                        SocketAddress readableSocketAddress = ch.receive(commandBuffer);
+                        commandByteBuffer.position(commandBuffer.position());
+                        commandByteBuffer.limit(commandBuffer.limit());
                         if (readableSocketAddress != null) {
                             commandByteBuffer.flip();
                             if(commandByteBuffer.hasRemaining()) {
-                                int bytesReceived = commandByteBuffer.remaining();
+                                long bytesReceived = commandByteBuffer.remaining();
                                 totalBytesReceived += bytesReceived;
 
                                 //read MoldUDP64 Packet
-                                int commandPosition = commandByteBuffer.position();
-                                int startingCommandPosition = commandPosition;
-                                commandMoldUDP64Packet.wrapForDecode(commandDirectBuffer, commandPosition, MoldUDP64Packet.BLOCK_LENGTH, MoldUDP64Packet.SCHEMA_VERSION);
+                                long commandPosition = commandByteBuffer.position();
+                                long startingCommandPosition = commandPosition;
+                                commandMoldUDP64Packet.wrapForDecode(commandDirectBuffer, (int)commandPosition, MoldUDP64Packet.BLOCK_LENGTH, MoldUDP64Packet.SCHEMA_VERSION);
                                 ByteUtils.fillWithSpaces(sessionBytes);
                                 commandMoldUDP64Packet.downstreamPacketHeader().getSession(sessionBytes, 0);
                                 long sourceSequence = commandMoldUDP64Packet.downstreamPacketHeader().sourceSequence();
@@ -205,7 +212,7 @@ public class Sequencer2 {
                                 //now each individual message
                                 for(int j=0; j<messageCount;j++) {
                                     //downstream packet message block
-                                    short messageLength = commandDirectBuffer.getShort(commandPosition, ByteOrder.BIG_ENDIAN);
+                                    short messageLength = commandDirectBuffer.getShort((int)commandPosition, ByteOrder.BIG_ENDIAN);
                                     commandPosition += 2;
                                     commandByteBuffer.position(commandPosition);
 
@@ -213,8 +220,8 @@ public class Sequencer2 {
                                     eventPosition += 2;
 
                                     //streamHeader
-                                    int streamHeaderPosition = commandPosition;
-                                    commandStreamHeader.wrap(commandDirectBuffer, commandPosition, streamHeaderVersion);
+                                    long streamHeaderPosition = commandPosition;
+                                    commandStreamHeader.wrap(commandDirectBuffer, (int)commandPosition, streamHeaderVersion);
                                     long timestampNanos = commandStreamHeader.timestampNanos();
                                     byte major = commandStreamHeader.major();
                                     byte minor = commandStreamHeader.minor();
@@ -241,9 +248,9 @@ public class Sequencer2 {
 
                                     //payload
                                     int payloadSize = messageLength - streamHeaderSize;
-                                    int bytesRead = commandDirectBuffer.getBytes(commandPosition, eventByteBuffer, payloadSize);
+                                    int bytesRead = commandDirectBuffer.getBytes((int)commandPosition, eventByteBuffer, payloadSize);
                                     assert (bytesRead == payloadSize);
-                                    byte messageType = commandDirectBuffer.getByte(commandPosition);
+                                    byte messageType = commandDirectBuffer.getByte((int)commandPosition);
                                     final byte eventMessageType = eventDirectBuffer.getByte(eventPosition);
                                     assert(messageType == eventMessageType);
                                     ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
