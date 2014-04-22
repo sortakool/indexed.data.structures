@@ -66,7 +66,8 @@ public class Client5 {
 
     private final EventMoldUDP64Packet eventMoldUDP64Packet = new EventMoldUDP64Packet();
     private final StreamHeader eventStreamHeader = new StreamHeader();
-    ByteBuffer eventByteBuffer;
+    ByteBuffer eventBuffer;
+    NativeMappedMemory eventByteBuffer;
     DirectBuffer eventDirectBuffer;
     int eventPosition = 0;
     long eventSequence = 0;
@@ -122,9 +123,10 @@ public class Client5 {
         commandPosition = 0;
 
         DatagramChannel eventChannel;
-        eventByteBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE*2);
-        eventByteBuffer.order(ByteOrder.BIG_ENDIAN);
-        eventDirectBuffer = new DirectBuffer(eventByteBuffer);
+        eventBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE*2);
+        eventBuffer.order(ByteOrder.BIG_ENDIAN);
+        eventByteBuffer = new NativeMappedMemory(eventBuffer);
+        eventDirectBuffer = new DirectBuffer(eventBuffer);
         eventPosition = 0;
 
         long eventSequence = 0;
@@ -186,17 +188,21 @@ public class Client5 {
                     }
                     else if (selectionKey.isReadable()) {
                         DatagramChannel ch = (DatagramChannel)selectionKey.channel();
-                        SocketAddress readableSocketAddress = ch.receive(eventByteBuffer);
+                        eventBuffer.position((int)eventByteBuffer.position());
+                        eventBuffer.limit((int)eventByteBuffer.limit());
+                        SocketAddress readableSocketAddress = ch.receive(eventBuffer);
+                        eventByteBuffer.position(eventBuffer.position());
+                        eventByteBuffer.limit(eventBuffer.limit());
                         if (readableSocketAddress != null) {
                             eventByteBuffer.flip();
                             if(eventByteBuffer.hasRemaining()) {
-                                int bytesReceived = eventByteBuffer.remaining();
+                                long bytesReceived = eventByteBuffer.remaining();
                                 totalBytesReceived += bytesReceived;
 
                                 //read Event MoldUDP64 Packet
-                                int eventPosition = eventByteBuffer.position();
-                                int startingEventPosition = eventPosition;
-                                eventMoldUDP64Packet.wrapForDecode(eventDirectBuffer, eventPosition, EventMoldUDP64Packet.BLOCK_LENGTH, EventMoldUDP64Packet.SCHEMA_VERSION);
+                                long eventPosition = eventByteBuffer.position();
+                                long startingEventPosition = eventPosition;
+                                eventMoldUDP64Packet.wrapForDecode(eventDirectBuffer, (int)eventPosition, EventMoldUDP64Packet.BLOCK_LENGTH, EventMoldUDP64Packet.SCHEMA_VERSION);
                                 eventSequence = eventMoldUDP64Packet.eventSequence();
                                 if(expectedEventSequence != eventSequence) {
                                     sb.setLength(0);
@@ -215,13 +221,13 @@ public class Client5 {
                                 //now each individual message
                                 for(int j=0; j<messageCount;j++) {
                                     //downstream packet message block
-                                    short messageLength = eventDirectBuffer.getShort(eventPosition, ByteOrder.BIG_ENDIAN);
+                                    short messageLength = eventDirectBuffer.getShort((int)eventPosition, ByteOrder.BIG_ENDIAN);
                                     eventPosition += 2;
                                     eventByteBuffer.position(eventPosition);
 
                                     //streamHeader
-                                    int streamHeaderPosition = eventPosition;
-                                    eventStreamHeader.wrap(eventDirectBuffer, eventPosition, streamHeaderVersion);
+                                    long streamHeaderPosition = eventPosition;
+                                    eventStreamHeader.wrap(eventDirectBuffer, (int)eventPosition, streamHeaderVersion);
                                     long timestampNanos = eventStreamHeader.timestampNanos();
                                     byte major = eventStreamHeader.major();
                                     byte minor = eventStreamHeader.minor();
@@ -256,7 +262,7 @@ public class Client5 {
                                     int payloadSize = messageLength - streamHeaderSize;
 //                            int bytesRead = eventDirectBuffer.getBytes(eventPosition, eventByteBuffer, payloadSize);
 //                            assert (bytesRead == payloadSize);
-                                    byte messageType = eventDirectBuffer.getByte(eventPosition);
+                                    byte messageType = eventDirectBuffer.getByte((int)eventPosition);
                                     ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
                                     eventPosition += payloadSize;
                                     eventByteBuffer.position(eventPosition);
