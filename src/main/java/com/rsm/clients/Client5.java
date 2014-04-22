@@ -1,5 +1,6 @@
 package com.rsm.clients;
 
+import com.rsm.buffer.NativeMappedMemory;
 import com.rsm.io.selector.SelectedSelectionKeySet;
 import com.rsm.io.selector.SelectorUtil;
 import com.rsm.message.nasdaq.SequenceUtility;
@@ -58,7 +59,8 @@ public class Client5 {
 //    private int sourceSequence = 0;
 
     DatagramChannel commandChannel = null;
-    ByteBuffer commandByteBuffer;
+    ByteBuffer commandBuffer;
+    NativeMappedMemory commandByteBuffer;
     DirectBuffer commandDirectBuffer;
     long commandPosition = 0;
 
@@ -113,9 +115,10 @@ public class Client5 {
         System.arraycopy(session.getBytes(), 0, sessionBytes, 0, session.getBytes().length);
         String sessionString = new String(sessionBytes);
 
-        commandByteBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE*2);
-        commandByteBuffer.order(ByteOrder.BIG_ENDIAN);
-        commandDirectBuffer = new DirectBuffer(commandByteBuffer);
+        commandBuffer = ByteBuffer.allocateDirect(MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE*2);
+        commandBuffer.order(ByteOrder.BIG_ENDIAN);
+        commandByteBuffer = new NativeMappedMemory(commandBuffer);
+        commandDirectBuffer = new DirectBuffer(commandBuffer);
         commandPosition = 0;
 
         DatagramChannel eventChannel;
@@ -311,7 +314,7 @@ public class Client5 {
                                 .messageCount(messageCount);
                         int moldUDP64PacketLength = commandMoldUDP64Packet.size();
                         commandPosition += moldUDP64PacketLength;
-                        commandByteBuffer.position((int)commandPosition);
+                        commandByteBuffer.position(commandPosition);
 
                         long currentCommandSequence = sequenceUtility.getSequence(sourceSequenceIndex);
                         expectedSourceSequence = currentCommandSequence;
@@ -331,7 +334,7 @@ public class Client5 {
                             //messageLength
                             commandDirectBuffer.putShort((int)commandPosition, totalMessageSize, ByteOrder.BIG_ENDIAN);
                             commandPosition += 2;
-                            commandByteBuffer.position((int)commandPosition);
+                            commandByteBuffer.position(commandPosition);
 
                             //streamHeader
                             long streamHeaderPosition = commandPosition;
@@ -344,16 +347,16 @@ public class Client5 {
                             commandStreamHeader.id(id);
                             commandStreamHeader.ref(9999L);
                             commandPosition += streamHeaderSize;
-                            commandByteBuffer.position((int)commandPosition);
+                            commandByteBuffer.position(commandPosition);
 
                             //payload
-                            int bytesRead = binaryFile.next(commandByteBuffer);
+                            short bytesRead = binaryFile.next(commandByteBuffer);
                             assert (bytesRead == messageLength);
                             byte messageType = commandDirectBuffer.getByte((int)commandPosition);
                             ITCHMessageType itchMessageType = ITCHMessageType.get(messageType);
 
                             commandPosition += bytesRead;
-                            commandByteBuffer.position((int)commandPosition);
+                            commandByteBuffer.position(commandPosition);
 
                             if((currentCommandSequence <= 1000) || (currentCommandSequence % logModCount == 0)) {
                                 sb.setLength(0);
@@ -380,14 +383,18 @@ public class Client5 {
                             messageCount++;
                             currentCommandSequence = sequenceUtility.incrementSequence(sourceSequenceIndex);
 
-                            final int diff = MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE - commandByteBuffer.position();
+                            final long diff = MoldUDPUtil.MAX_MOLDUDP_DOWNSTREAM_PACKET_SIZE - commandByteBuffer.position();
                             if(diff <= cutoff) {
                                 //set message count
                                 commandMoldUDP64Packet.wrapForEncode(commandDirectBuffer, (int)startingCommandPosition);
                                 commandMoldUDP64Packet.downstreamPacketHeader().messageCount(messageCount);
 
                                 commandByteBuffer.flip();
-                                int bytesSent = commandChannel.send(commandByteBuffer, commandGroup);
+                                commandBuffer.position((int)commandByteBuffer.position());
+                                commandBuffer.limit((int)commandByteBuffer.limit());
+                                int bytesSent = commandChannel.send(commandBuffer, commandGroup);
+                                commandByteBuffer.position(commandBuffer.position());
+                                commandByteBuffer.limit(commandBuffer.limit());
                                 totalBytesSent += bytesSent;
                                 final long endingCommandSequence = sequenceUtility.getSequence(sourceSequenceIndex);
                                 if((currentCommandSequence <= 1000) || (currentCommandSequence % logModCount == 0)) {
