@@ -1581,23 +1581,49 @@ implements Bytes, Cloneable
 
 
     /* ----------------------------------------------------------------------------------------------------------------------------- */
-    /* Bytes                                                                                                                         */
+    /* ByteArray                                                                                                                  */
     /* ----------------------------------------------------------------------------------------------------------------------------- */
 
-    /**
-     *  Retrieves <code>len</code> bytes starting at the specified index,
-     *  storing them in a newly created <code>byte[]</code>. Will span
-     *  segments if necessary to retrieve the requested number of bytes.
-     *
-     *  @throws IndexOutOfBoundsException if the request would read past
-     *          the end of file.
-     */
-    public byte[] getBytes(long index, int len)
+//    /**
+//     *  Retrieves <code>len</code> bytes starting at the specified index,
+//     *  storing them in a newly created <code>byte[]</code>. Will span
+//     *  segments if necessary to retrieve the requested number of bytes.
+//     *
+//     *  @throws IndexOutOfBoundsException if the request would read past
+//     *          the end of file.
+//     */
+//    public byte[] getBytes(long index, int len)
+//    {
+//        byte[] ret = new byte[len];
+//        return getBytes(index, ret, 0, len);
+//    }
+
+    public byte[] getBytes(byte[] destination)
     {
-        byte[] ret = new byte[len];
-        return getBytes(index, ret, 0, len);
+        return getBytes(destination, 0, destination.length);
     }
 
+    public byte[] getBytes(byte[] destination, int destinationPosition, int length)
+    {
+        while (length > 0)
+        {
+            currentByteBuffer = nativeMappedMemory(position);
+            final long bufferPosition = getBufferPosition(position);
+            int count = Integer.min(length, remainingAsInt(currentByteBuffer));
+            final int returnedCount = currentByteBuffer.getBytes(bufferPosition, destination, destinationPosition, count);
+            assert (count == returnedCount);
+            position += count;
+            destinationPosition += count;
+            length -= count;
+        }
+        processPosition();
+        return destination;
+    }
+
+    public byte[] getBytes(long index, byte[] array)
+    {
+        return getBytes(index, array, 0, array.length);
+    }
 
     /**
      *  Retrieves <code>len</code> bytes starting at the specified index,
@@ -1609,43 +1635,89 @@ implements Bytes, Cloneable
      *          the end of file.
      */
     @Override
-    public byte[] getBytes(long index, byte[] array, int off, int len)
+    public byte[] getBytes(long index, byte[] destination, int destinationPosition, int length)
     {
-        while (len > 0)
+        while (length > 0)
         {
             NativeMappedMemory buf = nativeMappedMemory(index);
-            int count = Math.min(len, remainingAsInt(buf));
+            int count = Math.min(length, remainingAsInt(buf));
             final long bufferPosition = getBufferPosition(index);
-            final int returnedCount = buf.getBytes(bufferPosition, array, off, count);
+            final int returnedCount = buf.getBytes(bufferPosition, destination, destinationPosition, count);
             assert (count == returnedCount);
             index += count;
-            off += count;
-            len -= count;
+            destinationPosition += count;
+            length -= count;
         }
         processPosition();
-        return array;
+        return destination;
     }
 
-    public byte[] getBytes(byte[] array, int off, int len)
+    public void putBytes(byte[] source)
     {
-        while (len > 0)
+        putBytes(source, 0, source.length);
+    }
+
+    public void putBytes(byte[] source, int sourcePosition, int length)
+    {
+        while (length > 0)
         {
             NativeMappedMemory buf = nativeMappedMemory(position);
-            int count = Math.min(len, remainingAsInt(buf));
+            int count = Math.min(length, remainingAsInt(buf));
             final long bufferPosition = getBufferPosition(position);
-            final int returnedCount = buf.getBytes(bufferPosition, array, off, count);
+            final int returnedCount = buf.putBytes(bufferPosition, source, sourcePosition, count);
             assert (count == returnedCount);
             position += count;
-            off += count;
-            len -= count;
+            sourcePosition += count;
+            length -= count;
         }
         processPosition();
-        return array;
     }
+
+    /**
+     *  Stores the contents of the passed byte array, starting at the given index.
+     *  Will span segments as needed.
+     *
+     *  @throws IndexOutOfBoundsException if the request would write past
+     *          the end of file.
+     */
+    public void putBytes(long index, byte[] source)
+    {
+        putBytes(index, source, 0, source.length);
+    }
+
+
+    /**
+     *  Stores a section of the passed byte array, defined by <code>off</code> and
+     *  <code>len</code>, starting at the given index. Will span segments as needed.
+     *
+     *  @throws IndexOutOfBoundsException if the request would write past
+     *          the end of file.
+     */
+    @Override
+    public void putBytes(long index, byte[] source, int sourcePosition, int length)
+    {
+        while (length > 0)
+        {
+            NativeMappedMemory buf = nativeMappedMemory(index);
+            int count = Math.min(length, remainingAsInt(buf));
+            final long bufferPosition = getBufferPosition(index);
+            final int returnedCount = buf.putBytes(bufferPosition, source, sourcePosition, count);
+            assert (count == returnedCount) : "returnedCount should be " + count + " but is " + returnedCount;
+            index += count;
+            sourcePosition += count;
+            length -= count;
+        }
+        processPosition();
+    }
+
 
     private int remainingAsInt(NativeMappedMemory buf) {
         return (int)Math.min(Integer.MAX_VALUE, buf.remaining());
     }
+
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
+    /* ByteBuffer                                                                                                                  */
+    /* ----------------------------------------------------------------------------------------------------------------------------- */
 
 //    public ByteArraySlice getBytes(long index, ByteArraySlice destination, long offset, long length) {
 //        destination.set
@@ -1672,7 +1744,7 @@ implements Bytes, Cloneable
         while (len > 0)
         {
             currentByteBuffer = nativeMappedMemory(position);
-            int count = Math.min(len, remainingAsInt(currentByteBuffer));
+            int count = Integer.min(len, remainingAsInt(currentByteBuffer));
             final long bufferPosition = getBufferPosition(position);
             final int returnedCount = currentByteBuffer.getBytes(bufferPosition, destination, count);
             assert (count == returnedCount);
@@ -1740,59 +1812,24 @@ implements Bytes, Cloneable
         return putBytes(index, source, source.remaining());
     }
 
-    public ByteBuffer putBytes(long index, ByteBuffer source, int len)
+    public ByteBuffer putBytes(long index, ByteBuffer source, int length)
     {
-        while (len > 0)
+        while (length > 0)
         {
             NativeMappedMemory buf = nativeMappedMemory(index);
-            int count = Math.min(len, remainingAsInt(buf));
+            int count = Math.min(length, remainingAsInt(buf));
             final long bufferPosition = getBufferPosition(index);
             final int returnedCount = buf.putBytes(bufferPosition, source, count);
             assert (count == returnedCount);
             index += count;
-            len -= count;
+            length -= count;
         }
         processPosition();
         return source;
     }
 
 
-    /**
-     *  Stores the contents of the passed byte array, starting at the given index.
-     *  Will span segments as needed.
-     *
-     *  @throws IndexOutOfBoundsException if the request would write past
-     *          the end of file.
-     */
-    public void putBytes(long index, byte[] value)
-    {
-        putBytes(index, value, 0, value.length);
-    }
 
-
-    /**
-     *  Stores a section of the passed byte array, defined by <code>off</code> and
-     *  <code>len</code>, starting at the given index. Will span segments as needed.
-     *
-     *  @throws IndexOutOfBoundsException if the request would write past
-     *          the end of file.
-     */
-    @Override
-    public void putBytes(long index, byte[] value, int off, int len)
-    {
-        while (len > 0)
-        {
-            NativeMappedMemory buf = nativeMappedMemory(index);
-            int count = Math.min(len, remainingAsInt(buf));
-            final long bufferPosition = getBufferPosition(index);
-            final int returnedCount = buf.putBytes(bufferPosition, value, off, count);
-            assert (count == returnedCount);
-            index += count;
-            off += count;
-            len -= count;
-        }
-        processPosition();
-    }
 
     /* ----------------------------------------------------------------------------------------------------------------------------- */
     /* NativeMappedMemory                                                                                                                         */

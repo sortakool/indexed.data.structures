@@ -1507,19 +1507,19 @@ implements Bytes, Cloneable
     /* Bytes                                                                                                                         */
     /* ----------------------------------------------------------------------------------------------------------------------------- */
 
-    /**
-     *  Retrieves <code>len</code> bytes starting at the specified index,
-     *  storing them in a newly created <code>byte[]</code>. Will span
-     *  segments if necessary to retrieve the requested number of bytes.
-     *
-     *  @throws IndexOutOfBoundsException if the request would read past
-     *          the end of file.
-     */
-    public byte[] getBytes(long index, int len)
-    {
-        byte[] ret = new byte[len];
-        return getBytes(index, ret, 0, len);
-    }
+//    /**
+//     *  Retrieves <code>len</code> bytes starting at the specified index,
+//     *  storing them in a newly created <code>byte[]</code>. Will span
+//     *  segments if necessary to retrieve the requested number of bytes.
+//     *
+//     *  @throws IndexOutOfBoundsException if the request would read past
+//     *          the end of file.
+//     */
+//    public byte[] getBytes(long index, int len)
+//    {
+//        byte[] ret = new byte[len];
+//        return getBytes(index, ret, 0, len);
+//    }
 
 
     /**

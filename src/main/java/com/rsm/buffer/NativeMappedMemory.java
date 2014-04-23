@@ -739,53 +739,109 @@ public class NativeMappedMemory {
         return getBytes(destination, 0, destination.length);
     }
 
-    public int getBytes(byte[] destination, int off, int len) {
-        validatePosition(len);
-        if (len < 0 || off < 0 || off + len > destination.length) {
-            throw new IllegalArgumentException();
+    public int getBytes(byte[] destination, int destinationPosition, int length) {
+        validatePosition(length);
+        final int offsetAndLength = destinationPosition + length;
+        final long remainingCapacity = remainingCapacity(position);
+        if (length < 0 || destinationPosition < 0 ||
+            (offsetAndLength > destination.length) ||
+            (length > remainingCapacity) ) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("[destinationPosition=").append(destinationPosition).append("]")
+              .append("[length=").append(length).append("]")
+              .append("[offsetAndLength=").append(offsetAndLength).append("]")
+              .append("[position=").append(position).append("]")
+              .append("[remaining=").append(remaining()).append("]")
+              .append("[remainingCapacity=").append(remainingCapacity).append("]")
+            ;
+            throw new IllegalArgumentException(sb.toString());
         }
-        long left = remaining();
-        if (left <= 0) return -1;
-        int len2 = (int) Math.min(len, left);
-        ByteUtils.UNSAFE.copyMemory(null, positionAddress(), destination, ByteUtils.BYTE_ARRAY_OFFSET + off, len2);
-        position += len2;
-        return len2;
+        long count = Long.min(length, remainingCapacity);
+        if (count <= 0) return -1;
+        ByteUtils.UNSAFE.copyMemory(byteArray, positionAddress(), destination, ByteUtils.BYTE_ARRAY_OFFSET + destinationPosition, count);
+        position += count;
+        return (int)count;
     }
 
     public int getBytes(long offset, byte[] destination) {
         return getBytes(offset, destination, 0, destination.length);
     }
 
-    public int getBytes(long offset, byte[] destination, int off, int len) {
-        validatePosition(offset, len);
-        if (len < 0 || off < 0 || off + len > destination.length)
-            throw new IllegalArgumentException();
-        long left = remaining();
-        if (left <= 0) return -1;
-        int len2 = (int) Math.min(len, left);
-        ByteUtils.UNSAFE.copyMemory(null, address(offset), destination, ByteUtils.BYTE_ARRAY_OFFSET + off, len2);
-        return len2;
+    public int getBytes(long offset, byte[] destination, int destinationPosition, int length) {
+        validatePosition(offset, length);
+        final int offsetAndLength = destinationPosition + length;
+        final long remainingCapacity = remainingCapacity(offset);
+        if (length < 0 || destinationPosition < 0 ||
+            (offsetAndLength > destination.length) ||
+            (length > remainingCapacity) ) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("[destinationPosition=").append(destinationPosition).append("]")
+              .append("[length=").append(length).append("]")
+              .append("[offsetAndLength=").append(offsetAndLength).append("]")
+              .append("[offset=").append(offset).append("]")
+              .append("[remainingCapacity=").append(remainingCapacity).append("]")
+            ;
+            throw new IllegalArgumentException(sb.toString());
+        }
+        long count = Long.min(length, remainingCapacity);
+        if (count <= 0) return -1;
+        ByteUtils.UNSAFE.copyMemory(byteArray, address(offset), destination, ByteUtils.BYTE_ARRAY_OFFSET + destinationPosition, count);
+        return (int)count;
     }
 
     public int putBytes(byte[] source) {
         return putBytes(source, 0, source.length);
     }
 
-    public int putBytes(byte[] source, int off, int len) {
-        validatePosition(len);
-        ByteUtils.UNSAFE.copyMemory(source, ByteUtils.BYTE_ARRAY_OFFSET + off, null, positionAddress(), len);
-        position += len;
-        return len;
+    public int putBytes(byte[] source, int sourcePosition, int length) {
+        validatePosition(length);
+        final int offsetAndLength = sourcePosition + length;
+        final long remainingCapacity = remainingCapacity(position);
+        if (length < 0 || sourcePosition < 0 ||
+            (offsetAndLength > source.length) ||
+            (length > remainingCapacity) ) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("[sourcePosition=").append(sourcePosition).append("]")
+              .append("[length=").append(length).append("]")
+              .append("[offsetAndLength=").append(offsetAndLength).append("]")
+              .append("[position=").append(position).append("]")
+              .append("[remainingCapacity=").append(remainingCapacity).append("]")
+            ;
+            throw new IllegalArgumentException(sb.toString());
+        }
+
+        long count = Long.min(length, remainingCapacity);
+        if (count <= 0) return -1;
+        ByteUtils.UNSAFE.copyMemory(source, ByteUtils.BYTE_ARRAY_OFFSET + sourcePosition, byteArray, positionAddress(), count);
+        position += count;
+        return (int)count;
     }
 
     public int putBytes(long offset, byte[] source) {
         return putBytes(offset, source, 0, source.length);
     }
 
-    public int putBytes(long offset, byte[] source, int off, int len) {
-        validatePosition(offset, len);
-        ByteUtils.UNSAFE.copyMemory(source, ByteUtils.BYTE_ARRAY_OFFSET + off, null, address(offset), len);
-        return len;
+    public int putBytes(long offset, byte[] source, int sourcePosition, int length) {
+        validatePosition(offset, length);
+        final int offsetAndLength = sourcePosition + length;
+        final long remainingCapacity = remainingCapacity(offset);
+        if (length < 0 || sourcePosition < 0 ||
+            (offsetAndLength > source.length) ||
+            (length > remainingCapacity) ) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("[sourcePosition=").append(sourcePosition).append("]")
+              .append("[length=").append(length).append("]")
+              .append("[offsetAndLength=").append(offsetAndLength).append("]")
+              .append("[offset=").append(offset).append("]")
+              .append("[remainingCapacity=").append(remainingCapacity).append("]")
+            ;
+            throw new IllegalArgumentException(sb.toString());
+        }
+
+        long count = Long.min(length, remainingCapacity);
+        if (count <= 0) return -1;
+        ByteUtils.UNSAFE.copyMemory(source, ByteUtils.BYTE_ARRAY_OFFSET + sourcePosition, byteArray, address(offset), count);
+        return (int)count;
     }
 
     /* ----------------------------------------------------------------------------------------------------------------------------- */
@@ -876,18 +932,21 @@ public class NativeMappedMemory {
         count = Math.min(length, count);
         if (count <= 0) return -1;
 
+        final byte[] dstByteArray;
         final long dstBaseOffset;
         if (destination.hasArray())
         {
+            dstByteArray = destination.array();
             dstBaseOffset = ByteUtils.BYTE_ARRAY_OFFSET + destination.arrayOffset();
         }
         else
         {
+            dstByteArray = null;
             dstBaseOffset = ((sun.nio.ch.DirectBuffer)destination).address();
         }
         final long destAddress = dstBaseOffset + destinationPosition;
         assert( positionAddress()+count <= capacityAddressOffset );
-        ByteUtils.UNSAFE.copyMemory(positionAddress(), destAddress, count);
+        ByteUtils.UNSAFE.copyMemory(byteArray, positionAddress(), dstByteArray, destAddress, count);
         position += count;
         return count;
     }
@@ -929,18 +988,21 @@ public class NativeMappedMemory {
         count = (int) Math.min(length, count);
         if (count <= 0) return -1;
 
+        final byte[] dstByteArray;
         final long dstBaseOffset;
         if (destination.hasArray())
         {
+            dstByteArray = destination.array();
             dstBaseOffset = ByteUtils.BYTE_ARRAY_OFFSET + destination.arrayOffset();
         }
         else
         {
+            dstByteArray = null;
             dstBaseOffset = ((sun.nio.ch.DirectBuffer)destination).address();
         }
         final long destAddress = dstBaseOffset + destinationPosition;
         assert(address(offset)+count <= capacityAddressOffset);
-        ByteUtils.UNSAFE.copyMemory(address(offset), destAddress, count);
+        ByteUtils.UNSAFE.copyMemory(byteArray, address(offset), dstByteArray, destAddress, count);
         return count;
     }
 
@@ -1100,19 +1162,21 @@ public class NativeMappedMemory {
     public long getBytes(final NativeMappedMemory  destination, long destinationPosition, long length) {
         validatePosition(length);
         final long destinationPositionAndLength = destinationPosition + length;
+        final long remainingCapacity = remainingCapacity(position);
         if (length < 0 || destinationPosition < 0 ||
             (destinationPositionAndLength > destination.capacity()) ||
-            (length > remaining()) ) {
+            (length > remainingCapacity) ) {
             StringBuilder sb = new StringBuilder();
-            sb.append("[length=").append(length).append("]")
-              .append("[destinationPosition=").append(destinationPosition).append("]")
+            sb.append("[destinationPosition=").append(destinationPosition).append("]")
               .append("[length=").append(length).append("]")
               .append("[destinationPositionAndLength=").append(destinationPositionAndLength).append("]")
+              .append("[position=").append(position).append("]")
               .append("[remaining=").append(remaining()).append("]")
+              .append("[remainingCapacity=").append(remainingCapacity).append("]")
             ;
             throw new IllegalArgumentException(sb.toString());
         }
-        long count = Long.min(destination.remainingCapacity(destinationPosition), remainingCapacity(position));
+        long count = Long.min(destination.remainingCapacity(destinationPosition), remainingCapacity);
         count = Long.min(length, count);
         if (count <= 0) return -1;
 
@@ -1120,7 +1184,7 @@ public class NativeMappedMemory {
         final long destAddress = dstBaseOffset + destinationPosition;
         assert( positionAddress()+count <= capacityAddressOffset );
         assert (destAddress+count <= destination.capacityAddressOffset());
-        ByteUtils.UNSAFE.copyMemory(positionAddress(), destAddress, count);
+        ByteUtils.UNSAFE.copyMemory(byteArray, positionAddress(), destination.byteArray(), destAddress, count);
         position += count;
         return count;
     }

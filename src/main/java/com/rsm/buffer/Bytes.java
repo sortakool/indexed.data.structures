@@ -141,11 +141,11 @@ public interface Bytes
     public void putChar(long index, char value);
 
 
-    /**
-     *  Returns an array containing the <code>len</code> bytes starting
-     *  at the specified index (relative to the relocation base).
-     */
-    public byte[] getBytes(long index, int len);
+//    /**
+//     *  Returns an array containing the <code>len</code> bytes starting
+//     *  at the specified index (relative to the relocation base).
+//     */
+//    public byte[] getBytes(long index, int len);
 
 
     byte[] getBytes(long index, byte[] array, int off, int len);

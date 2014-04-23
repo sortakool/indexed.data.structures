@@ -12,6 +12,7 @@ import java.nio.ByteOrder;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Random;
 
 /**
@@ -247,6 +248,72 @@ public class NativeMappedFileBufferTest {
     }
 
     @Test
+    public void testByteArray() throws Exception {
+        final long segmentSize = ByteUtils.PAGE_SIZE;
+        final long initialFileSize = segmentSize*4;
+        final NativeMappedFileBuffer mappedFile = createMappedFileBuffer(segmentSize, initialFileSize);
+
+        long position;
+
+        //ByteBuffer
+        int byteBufferCapacity = 32;
+        byte[] testByteArray = new byte[byteBufferCapacity];
+        byte[] returnedByteArray = new byte[byteBufferCapacity];
+        for(position = 0; position<initialFileSize*2; position++) {
+//            log.info("[position="+position+"]");
+            fillWithRandomBytes(testByteArray);
+            //absolute
+            mappedFile.putBytes(position, testByteArray);
+            mappedFile.getBytes(position, returnedByteArray);
+            Assert.assertTrue(Arrays.equals(testByteArray, returnedByteArray));
+
+            //relative
+            mappedFile.position(position);
+            mappedFile.getBytes(returnedByteArray);
+            Assert.assertTrue(Arrays.equals(testByteArray, returnedByteArray));
+
+            fillWithRandomBytes(testByteArray);
+            mappedFile.position(position);
+            mappedFile.putBytes(testByteArray);
+            mappedFile.position(position);
+            mappedFile.getBytes(returnedByteArray);
+            Assert.assertTrue(Arrays.equals(testByteArray, returnedByteArray));
+        }
+    }
+
+    @Test
+    public void testByteArray2() throws Exception {
+        final long segmentSize = ByteUtils.PAGE_SIZE;
+        final long initialFileSize = segmentSize*4;
+        final NativeMappedFileBuffer mappedFile = createMappedFileBuffer(segmentSize, initialFileSize);
+
+        long position;
+
+        //ByteBuffer
+        int byteBufferCapacity = (int)mappedFile.segmentSize()+1;
+        byte[] testByteBuffer = new byte[byteBufferCapacity];
+        byte[] returnedByteBuffer = new byte[byteBufferCapacity];
+
+        position = 0;
+        mappedFile.position(position);
+        fillWithRandomBytes(testByteBuffer);
+        //absolute
+        mappedFile.putBytes(position, testByteBuffer);
+        Assert.assertEquals(position, mappedFile.position());
+        mappedFile.getBytes(position, returnedByteBuffer);
+        Assert.assertEquals(position, mappedFile.position());
+
+        for(int i=0; i<byteBufferCapacity; i++) {
+            final byte mappedFileValue = mappedFile.get(i);
+            final byte testValue = testByteBuffer[i];
+            final byte returnedValue = mappedFile.get(i);
+            Assert.assertEquals(mappedFileValue, testValue);
+            Assert.assertEquals(mappedFileValue, returnedValue);
+        }
+        Assert.assertTrue(Arrays.equals(testByteBuffer,returnedByteBuffer));
+    }
+
+    @Test
     public void testByteBuffer() throws Exception {
         final long segmentSize = ByteUtils.PAGE_SIZE;
         final long initialFileSize = segmentSize*4;
@@ -336,7 +403,7 @@ public class NativeMappedFileBufferTest {
             Assert.assertEquals(mappedFileValue, testValue);
             Assert.assertEquals(mappedFileValue, returnedValue);
         }
-//        Assert.assertEquals(testByteBuffer, returnedByteBuffer);
+        Assert.assertEquals(testByteBuffer, returnedByteBuffer);
     }
 
     @Test
