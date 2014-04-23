@@ -1230,7 +1230,7 @@ public class NativeMappedMemory {
         final long destAddress = dstBaseOffset + destinationPosition;
         assert(address(offset)+count <= capacityAddressOffset);
         assert (destAddress+count <= destination.capacityAddressOffset());
-        ByteUtils.UNSAFE.copyMemory(address(offset), destAddress, count);
+        ByteUtils.UNSAFE.copyMemory(byteArray, address(offset), destination.byteArray, destAddress, count);
         position += count;
         return count;
     }
@@ -1274,7 +1274,7 @@ public class NativeMappedMemory {
         final long srcAddress = srcBaseOffset + srcOffset;
         assert (positionAddress()+count <= capacityAddressOffset());
         assert (srcAddress+count <= source.capacityAddressOffset());
-        ByteUtils.UNSAFE.copyMemory(srcAddress, positionAddress(),  count);
+        ByteUtils.UNSAFE.copyMemory(source.byteArray, srcAddress, byteArray, positionAddress(),  count);
         position += count;
         return count;
     }
@@ -1319,7 +1319,7 @@ public class NativeMappedMemory {
         final long srcAddress = srcBaseOffset + srcOffset;
         assert (address(offset)+count <= capacityAddressOffset());
         assert (srcAddress+count <= source.capacityAddressOffset());
-        ByteUtils.UNSAFE.copyMemory(srcAddress, address(offset),  count);
+        ByteUtils.UNSAFE.copyMemory(source.byteArray, srcAddress, byteArray, address(offset),  count);
         return count;
     }
 
